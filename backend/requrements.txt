@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+celery[redis]
+sqlalchemy[asyncio]
+asyncpg
+aiofiles
+psycopg2-binary
+passlib[bcrypt]
+pydantic-settings
+python-multipart
+python-jose[cryptography]
+PyMuPDF
+httpx
+qdrant-client

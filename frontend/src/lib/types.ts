@@ -1,0 +1,103 @@
+export interface Organization {
+  id: string
+  name: string
+  address?: string
+  is_active: boolean
+  created_at: string
+}
+
+export interface Role {
+  id: string
+  name: string
+  description?: string
+  organization_id: string
+  is_superadmin: boolean
+  is_admin: boolean
+  is_read_only: boolean
+  created_at: string
+}
+
+export interface User {
+  id: string
+  email: string
+  username: string
+  full_name?: string
+  employee_id?: string
+  organization_id: string
+  role_id: string
+  is_active: boolean
+  is_superuser: boolean
+  created_at: string
+}
+
+export interface Department {
+  id: string
+  name: string
+  organization_id: string
+  created_at: string
+}
+
+export interface DocumentType {
+  id: string
+  name: string
+  organization_id: string
+  created_at: string
+}
+
+export interface Folder {
+  id: string
+  name: string
+  parent_id?: string
+  organization_id: string
+  created_by_id: string
+  created_at: string
+}
+
+export interface Document {
+  id: string
+  file: string
+  file_number?: string
+  designation?: string
+  subject?: string
+  organization_id: string
+  department_id?: string
+  document_type_id?: string
+  folder_id?: string
+  status: string
+  priority: string
+  amount?: string
+  uploader_id: string
+  is_starred: boolean
+  is_archived: boolean
+  processing_state: string
+  parser_type?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface DashboardStats {
+  total_organizations: number
+  total_users: number
+  total_documents: number
+  total_departments: number
+}
+
+export interface SearchResultItem {
+  document_id: string
+  document_subject?: string
+  chunk_id: string
+  content: string
+  score: number
+  page_number?: number
+}
+
+export interface SearchResponse {
+  query: string
+  language: string
+  results: SearchResultItem[]
+}
+
+export interface ApiResponse<T> {
+  data?: T
+  error?: string
+}
