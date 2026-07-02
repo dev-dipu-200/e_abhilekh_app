@@ -76,7 +76,14 @@ class SearchQuery(BaseModel):
     query: str
     organization_id: str
     language: str = "en"
-    limit: int = 10
+    department_id: str | None = None
+    document_type_id: str | None = None
+    year: int | None = None
+    date_from: str | None = None
+    date_to: str | None = None
+    status: str | None = None
+    page: int = 1
+    page_size: int = 10
 
 
 class SearchResultItem(BaseModel):
@@ -86,6 +93,11 @@ class SearchResultItem(BaseModel):
     content: str
     score: float
     page_number: int | None = None
+    match_type: str = "semantic"
+    department: str | None = None
+    document_type: str | None = None
+    file_number: str | None = None
+    file_date: str | None = None
 
     class Config:
         from_attributes = True
@@ -95,3 +107,69 @@ class SearchResponse(BaseModel):
     query: str
     language: str
     results: list[SearchResultItem]
+    total: int = 0
+    page: int = 1
+    has_more: bool = False
+    elapsed_ms: int = 0
+
+
+class DraftTemplates(BaseModel):
+    id: str
+    name: str
+    label: str
+    description: str
+    icon: str = "file-text"
+
+
+class DraftGenerateRequest(BaseModel):
+    template_id: str
+    reference_id: str
+    instructions: str = ""
+    language: str = "en"
+    tone: str = "formal"
+    fresh_generation: bool = False
+
+
+class DraftGenerateResponse(BaseModel):
+    draft_text: str = ""
+    draft_html: str = ""
+    draft_json: str = ""
+    relevant_records: list[SearchResultItem] = []
+    subject: str = ""
+    template_id: str = ""
+    language: str = "en"
+    tone: str = "formal"
+
+
+class DraftCheckRequest(BaseModel):
+    reference_id: str
+    template_id: str
+    language: str = "en"
+
+
+class DraftCheckResponse(BaseModel):
+    exists: bool = False
+    draft_id: str | None = None
+    draft: DraftGenerateResponse | None = None
+
+
+class DraftSaveRequest(BaseModel):
+    reference_id: str
+    template_id: str
+    language: str = "en"
+    tone: str = "formal"
+    subject: str = ""
+    instructions: str = ""
+    draft_text: str = ""
+    draft_html: str = ""
+    draft_json: str = ""
+
+
+class DraftExportRequest(BaseModel):
+    draft_id: str
+    format: str = "docx"
+
+
+class DraftAttachRequest(BaseModel):
+    draft_id: str
+    document_id: str

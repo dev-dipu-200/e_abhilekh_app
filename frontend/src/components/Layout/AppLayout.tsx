@@ -16,6 +16,7 @@ const pageTitles: Record<string, string> = {
   '/document-types': 'Document Types',
   '/files': 'File Management',
   '/ai-search': 'AI Search',
+  '/ai-draft': 'AI Draft Generator',
 }
 
 interface AppLayoutProps {

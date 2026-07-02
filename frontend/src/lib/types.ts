@@ -89,12 +89,67 @@ export interface SearchResultItem {
   content: string
   score: number
   page_number?: number
+  match_type: string
+  department?: string
+  document_type?: string
+  file_number?: string
+  file_date?: string
 }
 
 export interface SearchResponse {
   query: string
   language: string
   results: SearchResultItem[]
+  total: number
+  page: number
+  has_more: boolean
+  elapsed_ms: number
+}
+
+export interface DraftTemplate {
+  id: string
+  name: string
+  label: string
+  description: string
+  icon: string
+}
+
+export interface DraftGenerateRequest {
+  template_id: string
+  reference_id: string
+  instructions?: string
+  language?: string
+  tone?: string
+  fresh_generation?: boolean
+}
+
+export interface DraftGenerateResponse {
+  draft_text: string
+  draft_html: string
+  draft_json: string
+  relevant_records: SearchResultItem[]
+  subject: string
+  template_id: string
+  language: string
+  tone: string
+}
+
+export interface DraftCheckResponse {
+  exists: boolean
+  draft_id?: string
+  draft?: DraftGenerateResponse
+}
+
+export interface DraftSaveRequest {
+  reference_id: string
+  template_id: string
+  language: string
+  tone: string
+  subject: string
+  instructions: string
+  draft_text: string
+  draft_html: string
+  draft_json: string
 }
 
 export interface ApiResponse<T> {

@@ -143,10 +143,10 @@ export const api = {
         request<import('./types').Document>(`/files/documents/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
       delete: (id: string) => request<void>(`/files/documents/${id}`, { method: 'DELETE' }),
     },
-    search: (data: { query: string; organization_id: string; language?: string; limit?: number }) =>
+    search: (data: { query: string; organization_id: string; language?: string; department_id?: string; document_type_id?: string; year?: number; date_from?: string; date_to?: string; status?: string; page?: number; page_size?: number }) =>
       request<import('./types').SearchResponse>('/files/search', {
         method: 'POST',
-        body: JSON.stringify({ ...data, language: data.language || 'en', limit: data.limit || 10 }),
+        body: JSON.stringify({ ...data, language: data.language || 'en', page: data.page || 1, page_size: data.page_size || 10 }),
       }),
     folders: {
       list: (orgId: string, parentId?: string) =>
@@ -155,6 +155,39 @@ export const api = {
         request<import('./types').Folder>('/files/folders', { method: 'POST', body: JSON.stringify(data) }),
       delete: (id: string) => request<void>(`/files/folders/${id}`, { method: 'DELETE' }),
     },
+    departmentsList: (orgId: string) =>
+      request<{ id: string; name: string }[]>(`/files/departments-list?organization_id=${orgId}`),
+    documentTypesList: (orgId: string) =>
+      request<{ id: string; name: string }[]>(`/files/document-types-list?organization_id=${orgId}`),
+  },
+
+  drafts: {
+    templates: () =>
+      request<import('./types').DraftTemplate[]>('/draft/templates'),
+    generateStream: (data: import('./types').DraftGenerateRequest) =>
+      `/draft/generate/stream`,
+    generate: (data: import('./types').DraftGenerateRequest) =>
+      request<import('./types').DraftGenerateResponse>('/draft/generate', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    check: (data: { reference_id: string; template_id: string; language?: string }) =>
+      request<import('./types').DraftCheckResponse>('/draft/check', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    save: (data: import('./types').DraftSaveRequest) =>
+      request<{ id: string; template_type: string }>('/draft/save', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    export: (draftId: string, format: string = 'docx') =>
+      `${API_BASE}/draft/export`,
+    attach: (draftId: string, documentId: string) =>
+      request<{ id: string; filename: string }>('/draft/attach', {
+        method: 'POST',
+        body: JSON.stringify({ draft_id: draftId, document_id: documentId }),
+      }),
   },
 
   dashboard: {

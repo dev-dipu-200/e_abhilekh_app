@@ -34,13 +34,7 @@ staticfiles/
 opencode -s ses_0e3720c55ffeRsm2bo3Z3TJLFB
 # Added by code-review-graph
 .code-review-graph/
-.claude
-.gemini
-.kiro
-.qodar
-GEMINI.md
-QODAR.md
-CLAUDE.md
-AGENTS.md
-.mcp.json
-.opencode.json
+.*/
+*.md
+*.json
+previews/

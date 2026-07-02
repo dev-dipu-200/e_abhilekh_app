@@ -12,6 +12,7 @@ from app.module.role.router import router as role_router
 from app.module.department.router import router as department_router
 from app.module.document_type.router import router as document_type_router
 from app.module.file_manage.router import router as file_manage_router
+from app.module.draft_generation.router import router as draft_router
 from app.module.auth.router import router as auth_router
 from app.settings.config import settings
 from app.utils.response import ErrorResponse
@@ -47,6 +48,7 @@ app.include_router(role_router, prefix="/api/v1")
 app.include_router(department_router, prefix="/api/v1")
 app.include_router(document_type_router, prefix="/api/v1")
 app.include_router(file_manage_router, prefix="/api/v1")
+app.include_router(draft_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 
 

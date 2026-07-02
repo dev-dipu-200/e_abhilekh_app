@@ -1,6 +1,7 @@
 import aiofiles
 import os
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.base import get_db
 from app.dependencies import get_current_user
@@ -93,8 +94,53 @@ async def create_folder(data: FolderCreate, db: AsyncSession = Depends(get_db)):
 
 @router.post("/search")
 async def search_documents(data: SearchQuery, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    results = await file_service.search_documents(db, data.query, data.organization_id, data.limit)
-    return SuccessResponse(result=SearchResponse(query=data.query, language=data.language, results=results), message="Search completed", status_code=200)
+    import time
+    start = time.time()
+    results = await file_service.search_documents(
+        db,
+        query=data.query,
+        organization_id=data.organization_id,
+        limit=data.page_size,
+        department_id=data.department_id,
+        document_type_id=data.document_type_id,
+        year=data.year,
+        date_from=data.date_from,
+        date_to=data.date_to,
+        status=data.status,
+        page=data.page,
+    )
+    elapsed = int((time.time() - start) * 1000)
+    return SuccessResponse(
+        result=SearchResponse(
+            query=data.query,
+            language=data.language,
+            results=results,
+            total=len(results),
+            page=data.page,
+            has_more=len(results) >= data.page_size,
+            elapsed_ms=elapsed,
+        ),
+        message="Search completed",
+        status_code=200,
+    )
+
+
+@router.get("/departments-list")
+async def list_departments(organization_id: str, db: AsyncSession = Depends(get_db)):
+    from app.database.file_model import Department
+    stmt = select(Department).where(Department.organization_id == organization_id)
+    result = await db.execute(stmt)
+    depts = result.scalars().all()
+    return SuccessResponse(result=[{"id": d.id, "name": d.name} for d in depts], message="Departments retrieved", status_code=200)
+
+
+@router.get("/document-types-list")
+async def list_document_types(organization_id: str, db: AsyncSession = Depends(get_db)):
+    from app.database.file_model import DocumentType
+    stmt = select(DocumentType).where(DocumentType.organization_id == organization_id)
+    result = await db.execute(stmt)
+    types = result.scalars().all()
+    return SuccessResponse(result=[{"id": t.id, "name": t.name} for t in types], message="Document types retrieved", status_code=200)
 
 
 @router.delete("/folders/{folder_id}")

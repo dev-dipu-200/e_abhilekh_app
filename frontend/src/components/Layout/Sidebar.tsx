@@ -13,6 +13,7 @@ import {
   FolderOpen,
   FileUp,
   Search,
+  PenTool,
   X,
 } from 'lucide-react'
 
@@ -25,6 +26,7 @@ const navItems = [
   { href: '/document-types', label: 'Document Types', icon: FileText },
   { href: '/files', label: 'File Management', icon: FolderOpen },
   { href: '/ai-search', label: 'AI Search', icon: Search },
+  { href: '/ai-draft', label: 'AI Draft', icon: PenTool },
 ]
 
 interface SidebarProps {
