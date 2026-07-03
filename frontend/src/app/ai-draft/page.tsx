@@ -27,6 +27,69 @@ const TEMPLATE_ICONS: Record<string, string> = {
 
 const LABELS = ['Header', 'Subject', 'Salutation', 'Body', 'Closure', 'Signature', 'Preamble', 'Directives', 'Distribution', 'Notice Title', 'Date', 'Issued By', 'Reference', 'From', 'Preliminary', 'Point-wise Replies', 'Legal Note', 'Appeal Note', 'Signatory', 'Conclusion', 'Details'] as const
 
+const LABEL_MAP: Record<string, string> = {
+  // English
+  'Header': 'Header',
+  'Subject': 'Subject',
+  'Salutation': 'Salutation',
+  'Body': 'Body',
+  'Closure': 'Closure',
+  'Signature': 'Signature',
+  'Preamble': 'Preamble',
+  'Directives': 'Directives',
+  'Distribution': 'Distribution',
+  'Notice Title': 'Notice Title',
+  'Date': 'Date',
+  'Issued By': 'Issued By',
+  'Reference': 'Reference',
+  'From': 'From',
+  'Preliminary': 'Preliminary',
+  'Point-wise Replies': 'Point-wise Replies',
+  'Legal Note': 'Legal Note',
+  'Appeal Note': 'Appeal Note',
+  'Signatory': 'Signatory',
+  'Conclusion': 'Conclusion',
+  'Details': 'Details',
+
+  // Hindi equivalents
+  'शीर्षक': 'Header',
+  'शीर्ष': 'Header',
+  'हेडर': 'Header',
+  'विषय': 'Subject',
+  'संबोधन': 'Salutation',
+  'महोदय': 'Salutation',
+  'महोदया': 'Salutation',
+  'मुख्य भाग': 'Body',
+  'बॉडी': 'Body',
+  'समापन': 'Closure',
+  'हस्ताक्षर': 'Signature',
+  'प्रस्तावना': 'Preamble',
+  'भूमिका': 'Preamble',
+  'दिशा-निर्देश': 'Directives',
+  'निर्देश': 'Directives',
+  'वितरण': 'Distribution',
+  'प्रतिलिपि': 'Distribution',
+  'सूचना शीर्षक': 'Notice Title',
+  'दिनांक': 'Date',
+  'तिथि': 'Date',
+  'जारीकर्ता': 'Issued By',
+  'द्वारा जारी': 'Issued By',
+  'संदर्भ': 'Reference',
+  'पत्र संख्या': 'Reference',
+  'प्रेषक': 'From',
+  'सेवा में': 'From',
+  'प्रारंभिक': 'Preliminary',
+  'बिंदुवार उत्तर': 'Point-wise Replies',
+  'उत्तर': 'Point-wise Replies',
+  'कानूनी टिप्पणी': 'Legal Note',
+  'विधिक नोट': 'Legal Note',
+  'अपील नोट': 'Appeal Note',
+  'हस्ताक्षरकर्ता': 'Signatory',
+  'हस्ताक्षरी': 'Signatory',
+  'निष्कर्ष': 'Conclusion',
+  'विवरण': 'Details'
+}
+
 function parseDraftSections(text: string): { label: string; content: string }[] {
   const lines = text.split('\n')
   const sections: { label: string; content: string }[] = []
@@ -34,15 +97,20 @@ function parseDraftSections(text: string): { label: string; content: string }[] 
   let currentContent: string[] = []
   let inBody = false
 
+  const labelKeys = Object.keys(LABEL_MAP).join('|')
+  const regex = new RegExp(`^(${labelKeys})\\s*(:|ः|：)\\s*(.*)`, 'i')
+
   for (const line of lines) {
     const trimmed = line.trim()
-    const match = trimmed.match(/^(Header|Subject|Salutation|Body|Closure|Signature|Preamble|Directives|Distribution|Notice Title|Date|Issued By|Reference|From|Preliminary|Point-wise Replies|Legal Note|Appeal Note|Signatory|Conclusion|Details):\s*(.*)/)
+    const match = trimmed.match(regex)
     if (match) {
       if (currentLabel) {
         sections.push({ label: currentLabel, content: currentContent.join('\n').trim() })
       }
-      currentLabel = match[1]
-      const rest = match[2].trim()
+      const rawLabel = match[1]
+      // Map to standard English label name
+      currentLabel = LABEL_MAP[rawLabel] || rawLabel
+      const rest = match[3].trim()
       currentContent = rest ? [rest] : []
       inBody = currentLabel === 'Body' || currentLabel === 'Directives' || currentLabel === 'Details'
     } else {
@@ -176,6 +244,9 @@ function AIDraftContent() {
   const [editorSugIndex, setEditorSugIndex] = useState(-1)
   const [editingWord, setEditingWord] = useState('')
   const instructRef = useRef<HTMLTextAreaElement>(null)
+  const editorRef = useRef<HTMLTextAreaElement>(null)
+  const instructWordRangeRef = useRef<{ start: number; end: number } | null>(null)
+  const editorWordRangeRef = useRef<{ start: number; end: number } | null>(null)
 
   const draftEndRef = useRef<HTMLDivElement>(null)
 
@@ -362,14 +433,34 @@ function AIDraftContent() {
   }
 
   const handleInstructionsSpace = async () => {
-    const words = instructions.split(/\s+/)
-    const lastWord = words[words.length - 1]
-    if (!lastWord || /[\u0900-\u097F]/.test(lastWord)) {
+    const textarea = instructRef.current
+    if (!textarea) return
+
+    const cursor = textarea.selectionStart
+    const text = textarea.value
+    const textBeforeCursor = text.slice(0, cursor)
+    
+    const wordMatch = textBeforeCursor.match(/([a-zA-Z0-9'-]+)$/)
+    if (!wordMatch) {
+      const newText = text.slice(0, cursor) + ' ' + text.slice(cursor)
+      setInstructions(newText)
+      setTimeout(() => {
+        textarea.selectionStart = textarea.selectionEnd = cursor + 1
+      }, 0)
       setSuggestions([])
-      setInstructions(i => i + ' ')
       return
     }
-    setInstructions(i => i + ' ')
+
+    const lastWord = wordMatch[1]
+    setEditingWord(lastWord)
+
+    const newText = text.slice(0, cursor) + ' ' + text.slice(cursor)
+    setInstructions(newText)
+    
+    const wordStart = cursor - lastWord.length
+    const wordEnd = cursor
+    instructWordRangeRef.current = { start: wordStart, end: wordEnd }
+
     const sugs = await fetchSuggestions(lastWord)
     if (sugs.length) {
       setSuggestions(sugs)
@@ -377,27 +468,73 @@ function AIDraftContent() {
     } else {
       setSuggestions([])
     }
+
+    setTimeout(() => {
+      textarea.selectionStart = textarea.selectionEnd = cursor + 1
+    }, 0)
   }
 
   const applyInstructionSuggestion = (sug: string) => {
-    const words = instructions.replace(/\s+$/, '').split(/\s+/)
-    words[words.length - 1] = sug
-    setInstructions(words.join(' ') + ' ')
+    const textarea = instructRef.current
+    if (!textarea) return
+
+    const range = instructWordRangeRef.current
+    const text = textarea.value
+
+    if (range) {
+      const newText = text.slice(0, range.start) + sug + text.slice(range.end)
+      setInstructions(newText)
+      const newCursor = range.start + sug.length + 1 // +1 for the space we added
+      setTimeout(() => {
+        textarea.focus()
+        textarea.selectionStart = textarea.selectionEnd = newCursor
+      }, 0)
+    }
+    
     setSuggestions([])
     setSuggestIndex(-1)
-    instructRef.current?.focus()
+    instructWordRangeRef.current = null
   }
 
   const handleEditorSpace = async () => {
-    const words = draftText.split(/\s+/)
-    const lastWord = words[words.length - 1]
-    if (!lastWord || /[\u0900-\u097F]/.test(lastWord) || lastWord.endsWith(':')) {
+    const textarea = editorRef.current
+    if (!textarea) return
+
+    const cursor = textarea.selectionStart
+    const text = textarea.value
+    const textBeforeCursor = text.slice(0, cursor)
+    
+    const wordMatch = textBeforeCursor.match(/([a-zA-Z0-9'-]+)$/)
+    if (!wordMatch) {
+      const newText = text.slice(0, cursor) + ' ' + text.slice(cursor)
+      setDraftText(newText)
+      setTimeout(() => {
+        textarea.selectionStart = textarea.selectionEnd = cursor + 1
+      }, 0)
       setEditorSuggestions([])
-      setDraftText(d => d + ' ')
       return
     }
+
+    const lastWord = wordMatch[1]
+    if (lastWord.endsWith(':')) {
+      const newText = text.slice(0, cursor) + ' ' + text.slice(cursor)
+      setDraftText(newText)
+      setTimeout(() => {
+        textarea.selectionStart = textarea.selectionEnd = cursor + 1
+      }, 0)
+      setEditorSuggestions([])
+      return
+    }
+    
     setEditingWord(lastWord)
-    setDraftText(d => d + ' ')
+
+    const newText = text.slice(0, cursor) + ' ' + text.slice(cursor)
+    setDraftText(newText)
+    
+    const wordStart = cursor - lastWord.length
+    const wordEnd = cursor
+    editorWordRangeRef.current = { start: wordStart, end: wordEnd }
+
     const sugs = await fetchSuggestions(lastWord)
     if (sugs.length) {
       setEditorSuggestions(sugs)
@@ -405,24 +542,41 @@ function AIDraftContent() {
     } else {
       setEditorSuggestions([])
     }
+
+    setTimeout(() => {
+      textarea.selectionStart = textarea.selectionEnd = cursor + 1
+    }, 0)
   }
 
   const applyDraftSuggestion = (sug: string) => {
-    const words = draftText.replace(/\s+$/, '').split(/\s+/)
-    const lastWord = words[words.length - 1]
-    if (lastWord.endsWith(':')) {
-      setEditorSuggestions([])
-      return
+    const textarea = editorRef.current
+    if (!textarea) return
+
+    const range = editorWordRangeRef.current
+    const text = textarea.value
+
+    if (range) {
+      const newText = text.slice(0, range.start) + sug + text.slice(range.end)
+      setDraftText(newText)
+      const newCursor = range.start + sug.length + 1 // +1 for the space we added
+      setTimeout(() => {
+        textarea.focus()
+        textarea.selectionStart = textarea.selectionEnd = newCursor
+      }, 0)
     }
-    words[words.length - 1] = sug
-    setDraftText(words.join(' ') + ' ')
+    
     setEditorSuggestions([])
     setEditorSugIndex(-1)
+    editorWordRangeRef.current = null
   }
 
   function repairDraftLabels(text: string): string {
-    const labelPattern = /\b(Header|Subject|Salutation|Body|Closure|Signature|Preamble|Directives|Distribution|Notice Title|Date|Issued By|Reference|From|Preliminary|Point-wise Replies|Legal Note|Appeal Note|Signatory|Conclusion|Details)(\s*):/g
-    return text.replace(labelPattern, (_, label, space) => `${label}:`)
+    const labelKeys = Object.keys(LABEL_MAP).join('|')
+    const regex = new RegExp(`(^|\\n|\\s)(${labelKeys})\\s*(:|ः|：)`, 'gi')
+    return text.replace(regex, (_, prefix, label) => {
+      const matchedKey = Object.keys(LABEL_MAP).find(k => k.toLowerCase() === label.toLowerCase())
+      return `${prefix}${matchedKey || label}:`
+    })
   }
 
   const switchToPreview = () => {
@@ -654,6 +808,7 @@ function AIDraftContent() {
                         </div>
                       ) : (
                         <textarea
+                          ref={editorRef}
                           value={draftText}
                           onChange={(e) => {
                             setDraftText(e.target.value)
