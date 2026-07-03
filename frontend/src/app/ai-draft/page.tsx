@@ -166,6 +166,7 @@ function AIDraftContent() {
   const [savedId, setSavedId] = useState<string | null>(null)
   const [showEditor, setShowEditor] = useState(false)
   const [previewMode, setPreviewMode] = useState(true)
+  const [editContent, setEditContent] = useState('')
   const [copied, setCopied] = useState(false)
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [suggestIndex, setSuggestIndex] = useState(-1)
@@ -390,7 +391,7 @@ function AIDraftContent() {
   const handleEditorSpace = async () => {
     const words = draftText.split(/\s+/)
     const lastWord = words[words.length - 1]
-    if (!lastWord || /[\u0900-\u097F]/.test(lastWord)) {
+    if (!lastWord || /[\u0900-\u097F]/.test(lastWord) || lastWord.endsWith(':')) {
       setEditorSuggestions([])
       setDraftText(d => d + ' ')
       return
@@ -408,10 +409,25 @@ function AIDraftContent() {
 
   const applyDraftSuggestion = (sug: string) => {
     const words = draftText.replace(/\s+$/, '').split(/\s+/)
+    const lastWord = words[words.length - 1]
+    if (lastWord.endsWith(':')) {
+      setEditorSuggestions([])
+      return
+    }
     words[words.length - 1] = sug
     setDraftText(words.join(' ') + ' ')
     setEditorSuggestions([])
     setEditorSugIndex(-1)
+  }
+
+  function repairDraftLabels(text: string): string {
+    const labelPattern = /\b(Header|Subject|Salutation|Body|Closure|Signature|Preamble|Directives|Distribution|Notice Title|Date|Issued By|Reference|From|Preliminary|Point-wise Replies|Legal Note|Appeal Note|Signatory|Conclusion|Details)(\s*):/g
+    return text.replace(labelPattern, (_, label, space) => `${label}:`)
+  }
+
+  const switchToPreview = () => {
+    setDraftText(d => repairDraftLabels(d))
+    setPreviewMode(true)
   }
 
   const selectedDocData = documents.find(d => d.id === selectedDoc)
@@ -602,7 +618,7 @@ function AIDraftContent() {
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-1 pb-3 border-b border-gray-100">
                       <div className="flex items-center gap-1">
-                        <button onClick={() => setPreviewMode(true)}
+                        <button onClick={switchToPreview}
                           className={`p-1.5 rounded text-xs px-3 flex items-center gap-1 ${previewMode ? 'bg-primary-100 text-primary-700' : 'hover:bg-gray-100 text-gray-500'}`}>
                           <Eye className="h-3.5 w-3.5" /> Preview
                         </button>

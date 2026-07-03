@@ -5,7 +5,7 @@ import httpx
 from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text as sa_text
-from app.database.file_model import Document, GeneratedDraft, Attachment, ActivityLog
+from app.database.file_model import Document, DocumentChunk, GeneratedDraft, Attachment, ActivityLog
 from app.database.user_model import Organization, User
 from app.utils.ollama_client import generate, chat
 from app.utils.qdrant_store import search as qdrant_search
@@ -181,19 +181,53 @@ async def get_document_with_relations(db: AsyncSession, doc_id: str):
     return result.unique().scalar_one_or_none()
 
 
-async def get_relevant_records(query: str, organization_id: str, limit: int = 5) -> list[SearchResultItem]:
+async def get_document_full_text(db: AsyncSession, doc_id: str, max_chars: int = 3000) -> str:
+    """Fetch the full extracted text from DocumentChunk records for richer LLM context."""
+    result = await db.execute(
+        select(DocumentChunk)
+        .where(DocumentChunk.document_id == doc_id)
+        .order_by(DocumentChunk.chunk_index)
+    )
+    chunks = result.scalars().all()
+    if not chunks:
+        return ""
+    # Join all chunks, truncate to max_chars to stay within LLM context
+    full_text = "\n\n".join(c.content for c in chunks)
+    return full_text[:max_chars]
+
+async def get_relevant_records(
+    query: str,
+    organization_id: str,
+    limit: int = 8,
+    secondary_query: str = "",
+) -> list[SearchResultItem]:
+    """Retrieve semantically relevant records for draft context.
+    
+    Uses query expansion: runs primary + secondary queries and deduplicates,
+    which broadens recall for more complete draft grounding.
+    """
     results = qdrant_search(query, organization_id, limit)
+
+    # Query expansion: also search using secondary_query (e.g., user instructions)
+    if secondary_query and secondary_query.strip() and secondary_query != query:
+        secondary = qdrant_search(secondary_query.strip(), organization_id, limit // 2)
+        seen_chunk_ids = {r["chunk_id"] for r in results}
+        for r in secondary:
+            if r["chunk_id"] not in seen_chunk_ids:
+                results.append(r)
+                seen_chunk_ids.add(r["chunk_id"])
+
     return [
         SearchResultItem(
             document_id=r["document_id"],
             document_subject=r.get("subject"),
             chunk_id=r["chunk_id"],
-            content=r["content"][:500],
+            content=r["content"][:600],  # More context per snippet
             score=r["score"],
             page_number=r.get("page_number"),
             match_type="semantic",
         )
-        for r in results
+        for r in results[:limit]
     ]
 
 
@@ -234,12 +268,22 @@ async def build_draft_context(
             f"Designation: {designation or 'N/A'}\n"
         )
 
-    relevant_records = await get_relevant_records(subject or reference_id, organization_id)
+    # Fetch full extracted text for richer LLM grounding
+    ref_full_text = ""
+    if ref_doc:
+        ref_full_text = await get_document_full_text(db, reference_id, max_chars=3000)
+
+    # Use query expansion: combine subject + user instructions for broader relevant record retrieval
+    relevant_records = await get_relevant_records(
+        subject or reference_id,
+        organization_id,
+        secondary_query=instructions,
+    )
     records_text = ""
     if relevant_records:
         records_lines = []
         for r in relevant_records:
-            records_lines.append(f"- {r.document_subject or 'Doc'}: {r.content[:300]}")
+            records_lines.append(f"- {r.document_subject or 'Doc'}: {r.content[:500]}")
         records_text = "\n".join(records_lines)
 
     visible_language = "Hindi" if language == "hi" else "English"
@@ -250,11 +294,17 @@ async def build_draft_context(
         f"Target language: {visible_language}",
         f"Tone: {tone}",
         "",
-        "=== REFERENCE DOCUMENT ===",
+        "=== REFERENCE DOCUMENT METADATA ===",
         ref_context,
     ]
+
+    # Include full extracted text for maximum factual grounding
+    if ref_full_text:
+        prompt_parts.append("=== REFERENCE DOCUMENT EXTRACTED TEXT (use this as primary content source) ===")
+        prompt_parts.append(ref_full_text)
+
     if records_text:
-        prompt_parts.append("=== RELEVANT SEARCH RECORDS (from indexed documents) ===")
+        prompt_parts.append("=== RELEVANT SUPPORTING RECORDS (from other indexed documents) ===")
         prompt_parts.append(records_text)
     if instructions:
         prompt_parts.append("=== USER INSTRUCTIONS ===")
@@ -369,14 +419,20 @@ async def build_draft_context(
 def generate_draft_stream(context: dict):
     payload = {
         "model": settings.OLLAMA_GENERATION_MODEL,
-        "prompt": context["prompt"],
-        "system": context["system_prompt"],
+        "messages": [
+            {"role": "system", "content": context["system_prompt"]},
+            {"role": "user", "content": context["prompt"]},
+        ],
         "stream": True,
-        "options": {"temperature": 0.3},
+        "options": {
+            "temperature": 0.5,
+            "num_predict": 2048,
+            "repeat_penalty": 1.1,
+        },
     }
     with httpx.stream(
         "POST",
-        f"{settings.OLLAMA_BASE_URL}/api/generate",
+        f"{settings.OLLAMA_BASE_URL}/api/chat",
         json=payload,
         verify=False,
         timeout=300,
@@ -385,8 +441,10 @@ def generate_draft_stream(context: dict):
             if line:
                 try:
                     data = json.loads(line)
-                    if "response" in data:
-                        yield data["response"]
+                    # /api/chat streaming returns message.content
+                    content = data.get("message", {}).get("content", "")
+                    if content:
+                        yield content
                     if data.get("done"):
                         break
                 except json.JSONDecodeError:
@@ -394,10 +452,13 @@ def generate_draft_stream(context: dict):
 
 
 def generate_draft_non_stream(context: dict) -> str:
-    return generate(
-        prompt=context["prompt"],
-        system=context["system_prompt"],
-        temperature=0.3,
+    return chat(
+        messages=[
+            {"role": "system", "content": context["system_prompt"]},
+            {"role": "user", "content": context["prompt"]},
+        ],
+        temperature=0.5,
+        num_predict=2048,
     )
 
 

@@ -2,12 +2,16 @@ import httpx
 from app.settings.config import settings
 
 
-def generate(prompt: str, system: str | None = None, temperature: float = 0.7) -> str:
+def generate(prompt: str, system: str | None = None, temperature: float = 0.7, num_predict: int = 1024) -> str:
     payload = {
         "model": settings.OLLAMA_GENERATION_MODEL,
         "prompt": prompt,
         "stream": False,
-        "options": {"temperature": temperature},
+        "options": {
+            "temperature": temperature,
+            "num_predict": num_predict,
+            "repeat_penalty": 1.1,
+        },
     }
     if system:
         payload["system"] = system
@@ -22,12 +26,17 @@ def generate(prompt: str, system: str | None = None, temperature: float = 0.7) -
     return resp.json()["response"]
 
 
-def chat(messages: list[dict], temperature: float = 0.7) -> str:
+def chat(messages: list[dict], temperature: float = 0.7, num_predict: int = 1024) -> str:
+    """Use /api/chat endpoint for better instruction-following via message role structure."""
     payload = {
         "model": settings.OLLAMA_GENERATION_MODEL,
         "messages": messages,
         "stream": False,
-        "options": {"temperature": temperature},
+        "options": {
+            "temperature": temperature,
+            "num_predict": num_predict,
+            "repeat_penalty": 1.1,
+        },
     }
     resp = httpx.post(
         f"{settings.OLLAMA_BASE_URL}/api/chat",

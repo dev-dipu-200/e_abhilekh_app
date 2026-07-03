@@ -131,7 +131,14 @@ async def search_documents(
 ) -> list[SearchResultItem]:
     start = time.time()
 
-    results = qdrant_search(query, organization_id, limit * 2)
+    # Pass metadata filters directly to Qdrant for pre-filtering accuracy
+    results = qdrant_search(
+        query,
+        organization_id,
+        limit * 3,
+        department_id=department_id,
+        document_type_id=document_type_id,
+    )
 
     doc_ids = list(set(r["document_id"] for r in results))
     if not doc_ids:
@@ -142,10 +149,7 @@ async def search_documents(
         joinedload(Document.document_type),
     ).where(Document.id.in_(doc_ids))
 
-    if department_id:
-        stmt = stmt.where(Document.department_id == department_id)
-    if document_type_id:
-        stmt = stmt.where(Document.document_type_id == document_type_id)
+    # Secondary DB-level filters for year and date range
     if year:
         stmt = stmt.where(extract("year", Document.document_date) == year)
     if date_from:
@@ -160,20 +164,23 @@ async def search_documents(
 
     items = []
     query_lower = query.lower()
+    query_words = [w for w in query_lower.split() if len(w) > 2]
     for r in results:
         doc = filtered_docs.get(r["document_id"])
         if not doc:
             continue
-        content_lower = r["content"][:300].lower()
-        # Determine match type: exact if query words appear in content
-        query_words = [w for w in query_lower.split() if len(w) > 2]
-        match_type = "exact" if any(w in content_lower for w in query_words) else "semantic"
+        content_snippet = r["content"][:600]
+        content_lower = content_snippet.lower()
+        # Exact match: all query words found verbatim in the content/subject
+        subject_lower = (r.get("subject") or doc.subject or "").lower()
+        exact_count = sum(1 for w in query_words if w in content_lower or w in subject_lower)
+        match_type = "exact" if exact_count >= max(1, len(query_words) // 2) else "semantic"
 
         items.append(SearchResultItem(
             document_id=r["document_id"],
             document_subject=r.get("subject") or doc.subject,
             chunk_id=r["chunk_id"],
-            content=r["content"][:300],
+            content=content_snippet,
             score=r["score"],
             page_number=r.get("page_number"),
             match_type=match_type,

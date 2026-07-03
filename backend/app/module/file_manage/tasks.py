@@ -20,23 +20,66 @@ def _get_doc(session: Session, doc_id: str) -> Document | None:
     return session.query(Document).filter(Document.id == doc_id).first()
 
 
-def _chunk_text(text: str, max_chars: int = 384) -> list[tuple[str, int]]:
-    paragraphs = text.split("\n\n")
+def _chunk_text(text: str, max_chars: int = 800) -> list[tuple[str, int]]:
+    """Split text into semantically meaningful chunks.
+    
+    Strategy:
+    1. Split on double-newlines (paragraph boundaries)
+    2. Merge short paragraphs together up to max_chars
+    3. For long paragraphs, split at sentence boundaries (. ! ?)
+    4. 20% overlap between consecutive chunks to preserve cross-boundary context
+    """
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
     chunks: list[tuple[str, int]] = []
     current = ""
+
+    def _split_at_sentence(para: str, limit: int) -> list[str]:
+        """Split a long paragraph at sentence boundaries."""
+        result = []
+        # Try sentence delimiters
+        import re
+        sentences = re.split(r'(?<=[।.!?])\s+', para)
+        buf = ""
+        for sent in sentences:
+            if len(buf) + len(sent) < limit:
+                buf = (buf + " " + sent).strip()
+            else:
+                if buf:
+                    result.append(buf)
+                # Handle very long single sentences
+                while len(sent) > limit:
+                    result.append(sent[:limit])
+                    sent = sent[limit:]
+                buf = sent
+        if buf:
+            result.append(buf)
+        return result if result else [para[:limit]]
+
     for para in paragraphs:
-        para = para.strip()
         if not para:
             continue
-        if len(current) + len(para) < max_chars:
-            current = (current + "\n\n" + para).strip()
+        if len(current) + len(para) + 2 <= max_chars:
+            current = (current + "\n\n" + para).strip() if current else para
         else:
             if current:
                 chunks.append((current, 0))
-            while len(para) > max_chars:
-                chunks.append((para[:max_chars], 0))
-                para = para[max_chars:]
-            current = para
+                # 20% overlap: carry last 20% of current into next chunk
+                overlap_start = max(0, len(current) - max_chars // 5)
+                current = current[overlap_start:].strip()
+            if len(para) > max_chars:
+                sub_chunks = _split_at_sentence(para, max_chars)
+                for i, sc in enumerate(sub_chunks):
+                    if i < len(sub_chunks) - 1:
+                        chunks.append((sc, 0))
+                    else:
+                        current = sc
+            else:
+                if len(current) + len(para) + 2 <= max_chars:
+                    current = (current + "\n\n" + para).strip() if current else para
+                else:
+                    chunks.append((current, 0))
+                    current = para
+
     if current:
         chunks.append((current, 0))
     if not chunks:
@@ -90,6 +133,9 @@ def process_document_file(self, document_id: str):
                             "subject": doc.subject,
                             "organization_id": doc.organization_id,
                             "document_id": document_id,
+                            "department_id": doc.department_id,
+                            "document_type_id": doc.document_type_id,
+                            "file_number": doc.file_number,
                         })
                         chunk_index += 1
 
