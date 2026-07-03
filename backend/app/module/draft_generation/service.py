@@ -31,7 +31,17 @@ TEMPLATE_GUIDANCE = {
 SYSTEM_PROMPTS = {
     "letter": """You are a government letter drafting assistant. Write a professional official letter in the specified language.
 
-Use these EXACT labels: Header:, Subject:, Salutation:, Body:, Closure:, Signature:.
+Use EXACTLY these labels with content on the SAME line after the colon:
+  Header: <content>
+  Subject: <content>
+  Salutation: <content>
+  Body: (newline then paragraphs)
+  Closure: <content>
+  Signature: <content>
+
+For Body: put the content on the NEXT line (newline after the label), then write paragraphs.
+For all OTHER labels: put content immediately on the same line after the colon and space.
+Never insert blank lines between a label and its content.
 
 CRITICAL RULES:
 1. NEVER use bracket placeholders like [Signature], [Name], [Date], [Designation], [Placeholder]. Fill in every field with concrete content based on the reference context provided.
@@ -43,7 +53,17 @@ CRITICAL RULES:
 
     "circular": """You are a government circular drafting assistant. Draft a department circular in the specified language.
 
-Use these EXACT labels: Header:, Subject:, Preamble:, Directives:, Closure:, Distribution:.
+Use EXACTLY these labels with content on the SAME line after the colon:
+  Header: <content>
+  Subject: <content>
+  Preamble: <content>
+  Directives: (newline then numbered items)
+  Closure: <content>
+  Distribution: <content>
+
+For Directives: put content on the NEXT line, then write 3-5 numbered items.
+For all OTHER labels: put content on same line after the colon.
+No blank lines between a label and its content.
 
 CRITICAL RULES:
 1. NEVER use bracket placeholders. Fill every field with concrete content from the reference context.
@@ -54,7 +74,14 @@ CRITICAL RULES:
 
     "notice": """You are a government notice drafting assistant. Draft a public or internal notice in the specified language.
 
-Use these EXACT labels: Notice Title:, Date:, Body:, Issued By:.
+Use EXACTLY these labels with content on the SAME line after the colon:
+  Notice Title: <content>
+  Date: <content>
+  Body: (newline then paragraphs)
+  Issued By: <content>
+
+For Body: put content on the NEXT line.
+For all other labels: content on same line. No blank lines between label and content.
 
 CRITICAL RULES:
 1. NEVER use bracket placeholders. Fill every field with concrete content from the reference context.
@@ -65,7 +92,19 @@ CRITICAL RULES:
 
     "rti": """You are an RTI reply drafting assistant under the RTI Act, 2005. Draft a reply to an RTI application in the specified language.
 
-Use these EXACT labels: Reference:, Date:, From:, Subject:, Preliminary:, Point-wise Replies:, Legal Note:, Appeal Note:, Signatory:.
+Use EXACTLY these labels with content on the SAME line after the colon:
+  Reference: <content>
+  Date: <content>
+  From: <content>
+  Subject: <content>
+  Preliminary: <content>
+  Point-wise Replies: (newline then numbered replies)
+  Legal Note: <content>
+  Appeal Note: <content>
+  Signatory: <content>
+
+For Point-wise Replies: put content on the NEXT line.
+For all other labels: content on same line. No blank lines between label and content.
 
 CRITICAL RULES:
 1. NEVER use bracket placeholders. Fill every field with concrete content.
@@ -78,7 +117,14 @@ CRITICAL RULES:
 
     "information": """You are an information memorandum drafting assistant. Draft an informative office document in the specified language.
 
-Use these EXACT labels: Subject:, Reference:, Details:, Conclusion:.
+Use EXACTLY these labels with content on the SAME line after the colon:
+  Subject: <content>
+  Reference: <content>
+  Details: (newline then content)
+  Conclusion: <content>
+
+For Details: put content on the NEXT line.
+For all other labels: content on same line. No blank lines between label and content.
 
 CRITICAL RULES:
 1. NEVER use bracket placeholders. Fill every field with concrete content from the reference context.
@@ -224,15 +270,64 @@ async def build_draft_context(
 
     prompt_parts.append("")
     prompt_parts.append("=== STRUCTURE LABELS ===")
+
+    STRUCTURE_LABELS_MAP = {
+        "letter": {
+            "labels": ["Header: <text>", "Subject: <text>", "Salutation: <text>", "Body: <paragraphs>", "Closure: <text>", "Signature: <text>"],
+            "multiline": ["Body"],
+            "example_correct": "Header: सरकारी पत्र\nSubject: उत्तर प्रदेश सरकार के अधीनस्थ विभागों में पदोन्नति नीति\nSalutation: पूर्ववर्ती, शासन\nBody:\nयह पत्र आपको सूचित करने के लिए है कि...\n\nइस नीति के तहत...\nClosure: यह पत्र सरकारी उद्देश्यों के लिए जारी किया गया है।\nSignature: (अधिकारी का नाम), (पदनाम)",
+            "example_wrong": "Header:\n\nसरकारी पत्र\n\n\nSubject:\nsome text\n\nDo NOT output like the wrong example above.",
+        },
+        "circular": {
+            "labels": ["Header: <text>", "Subject: <text>", "Preamble: <text>", "Directives: <numbered items>", "Closure: <text>", "Distribution: <text>"],
+            "multiline": ["Directives"],
+            "example_correct": "Header: शासनादेश\nSubject: विभागीय परिपत्र\nPreamble: सभी अधीनस्थ कार्यालयों को निर्देशित किया जाता है...\nDirectives:\n1. नीति का अनुपालन सुनिश्चित करें\n2. रिपोर्ट 31 अगस्त तक प्रस्तुत करें\nClosure: यह परिपत्र सभी संबंधित अधिकारियों को निर्देशित है।\nDistribution: सभी जिलाधिकारी, उत्तर प्रदेश",
+            "example_wrong": "",
+        },
+        "notice": {
+            "labels": ["Notice Title: <text>", "Date: <text>", "Body: <paragraphs>", "Issued By: <text>"],
+            "multiline": ["Body"],
+            "example_correct": "Notice Title: सार्वजनिक सूचना\nDate: 05-05-2026\nBody:\nसूचना के माध्यम से सभी संबंधितों को अवगत कराया जाता है...\nIssued By: जिला मजिस्ट्रेट, लखनऊ",
+            "example_wrong": "",
+        },
+        "rti": {
+            "labels": ["Reference: <text>", "Date: <text>", "From: <text>", "Subject: <text>", "Preliminary: <text>", "Point-wise Replies: <numbered replies>", "Legal Note: <text>", "Appeal Note: <text>", "Signatory: <text>"],
+            "multiline": ["Point-wise Replies"],
+            "example_correct": "Reference: RTI आवेदन संख्या RTI/2026/123\nDate: 05-05-2026\nFrom: सार्वजनिक सूचना अधिकारी\nSubject: सूचना का अधिकार अधिनियम, 2005 के तहत उत्तर\nPreliminary: प्रस्तुत प्रकरण में...\nPoint-wise Replies:\n1. प्रश्न 1 का उत्तर: ...\n2. प्रश्न 2 का उत्तर: ...\nLegal Note: धारा 8(1) के तहत छूट...\nAppeal Note: प्रथम अपील धारा 19(1) के तहत...\nSignatory: (नाम), सार्वजनिक सूचना अधिकारी",
+            "example_wrong": "",
+        },
+        "information": {
+            "labels": ["Subject: <text>", "Reference: <text>", "Details: <content>", "Conclusion: <text>"],
+            "multiline": ["Details"],
+            "example_correct": "Subject: विभागीय जानकारी\nReference: पत्र संख्या 3/2026/268\nDetails:\nप्रस्तुत प्रकरण में विभाग द्वारा...\n\nइसके अतिरिक्त...\nConclusion: उपरोक्त जानकारी आपके संदर्भ हेतु प्रस्तुत है।",
+            "example_wrong": "",
+        },
+    }
+
+    struct = STRUCTURE_LABELS_MAP.get(template_id, STRUCTURE_LABELS_MAP["letter"])
+    labels_text = "\n".join(struct["labels"])
+    multiline_str = ", ".join(struct["multiline"])
+    multiline_names = " or ".join(struct["multiline"])
+
     prompt_parts.append(
-        "Use these EXACT labels in your output (one per line):\n"
-        "Header:\n"
-        "Subject:\n"
-        "Salutation:\n"
-        "Body:\n"
-        "Closure:\n"
-        "Signature:\n"
+        f"Use these EXACT labels followed by a colon and a space, then the content on the SAME line:\n"
+        f"{labels_text}\n"
+        f"\n"
+        f"Only the {multiline_str} label(s) get a newline after it (to separate paragraphs/items).\n"
+        f"All other labels: content follows on the SAME line after 'Label: '.\n"
+        f"Never put a blank line between a label and its content."
     )
+
+    prompt_parts.append("")
+    example_correct = struct.get("example_correct")
+    example_wrong = struct.get("example_wrong")
+    if example_correct:
+        ex = f"=== FORMATTING EXAMPLE (correct) ===\n{example_correct}"
+        if example_wrong:
+            ex += f"\n\n=== FORMATTING EXAMPLE (wrong) ===\n{example_wrong}"
+        else:
+            ex += "\n\nEnsure all non-body labels have content on the same line as the label."
+        prompt_parts.append(ex)
 
     prompt_parts.append("")
     prompt_parts.append(
@@ -240,14 +335,27 @@ async def build_draft_context(
         "1. NEVER use bracket placeholders like [Signature], [Name], [Date], [Designation], [Placeholder], [OM Number], etc. Fill in every field with concrete content from the reference context.\n"
         "2. If the reference context does not provide a specific value, infer it logically or leave it out entirely. Do NOT write placeholder brackets.\n"
         f"3. The subject must describe the action/matter, not a person's name.\n"
-        f"4. Write at least 200 words for the body. Make the draft complete and actionable.\n"
-        "5. Do NOT wrap the entire draft in JSON. Output raw text only, with the labels above.\n"
-        "6. Do NOT use markdown, code fences, or any JSON delimiters.\n"
-        "7. Do NOT include greetings like Namaste, Dear, प्रिय, नमस्ते.\n"
-        "8. Base the draft primarily on the REFERENCE DOCUMENT. Use the search records as supporting evidence.\n"
-        "9. Generate a fresh, original draft. Do not copy the reference document verbatim.\n"
-        "10. Stop immediately after the Signature section."
+        f"4. Write a MINIMUM of 150 words. The draft must be complete, detailed, and actionable. Short drafts are unacceptable.\n"
+        "5. Every claim in the draft must be grounded in the REFERENCE DOCUMENT or the RELEVANT SEARCH RECORDS provided above. Do not invent facts.\n"
+        "6. Do NOT wrap the entire draft in JSON. Output raw text only, with the labels above.\n"
+        "7. Do NOT use markdown, code fences, or any JSON delimiters.\n"
+        "8. Do NOT include greetings like Namaste, Dear, प्रिय, नमस्ते.\n"
+        "9. Base the draft primarily on the REFERENCE DOCUMENT. Use the search records as supporting evidence.\n"
+        "10. Generate a fresh, original draft. Do not copy the reference document verbatim.\n"
+        "11. Stop immediately after the final section.\n"
+        "12. NO blank lines between a label colon and its content. Content goes on the same line as the label."
     )
+
+    if template_id == "information":
+        prompt_parts.append("")
+        prompt_parts.append(
+            "=== USER KEY POINTS / INSTRUCTIONS ===\n"
+            f"The user has provided the following key points and instructions above (under 'USER INSTRUCTIONS'). "
+            f"These are the PRIMARY source of content for this Information document. "
+            f"Analyse each key point thoroughly and expand it into well-structured paragraphs. "
+            f"Use the REFERENCE DOCUMENT and SEARCH RECORDS only as supporting context. "
+            f"Do not deviate from the user's key points."
+        )
 
     return {
         "prompt": "\n".join(prompt_parts),

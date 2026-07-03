@@ -11,6 +11,13 @@ function getToken(): string | null {
 
 import { toast } from './toast'
 
+export function redirectIfUnauthorized(res: Response): void {
+  if (res.status === 401 && typeof window !== 'undefined') {
+    localStorage.removeItem('auth')
+    window.location.href = '/login'
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = getToken()
   const headers: Record<string, string> = {
@@ -27,10 +34,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     ...options,
   })
   if (res.status === 401) {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('auth')
-      window.location.href = '/login'
-    }
+    redirectIfUnauthorized(res)
     throw new Error('Unauthorized')
   }
   if (!res.ok) {
@@ -131,6 +135,7 @@ export const api = {
           body: form,
         })
         if (!res.ok) {
+          redirectIfUnauthorized(res)
           const err = await res.json().catch(() => ({ message: 'Upload failed' }))
           toast(err.message || 'Upload failed', 'error')
           throw new Error(err.message || 'Upload failed')

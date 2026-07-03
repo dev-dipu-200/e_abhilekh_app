@@ -38,6 +38,9 @@ async def generate_draft_stream(
     if not org_id:
         raise HTTPException(status_code=400, detail="User has no organization")
 
+    if data.template_id == "information" and not data.instructions.strip():
+        raise HTTPException(status_code=422, detail="Key Points/Instructions are required for Information template")
+
     context = await draft_service.build_draft_context(
         db=db,
         template_id=data.template_id,
@@ -78,6 +81,9 @@ async def generate_draft(
     org_id = current_user.organization_id
     if not org_id:
         raise HTTPException(status_code=400, detail="User has no organization")
+
+    if data.template_id == "information" and not data.instructions.strip():
+        raise HTTPException(status_code=422, detail="Key Points/Instructions are required for Information template")
 
     context = await draft_service.build_draft_context(
         db=db,
