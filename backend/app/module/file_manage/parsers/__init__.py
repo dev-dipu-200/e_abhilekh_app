@@ -4,6 +4,8 @@ PARSER_REGISTRY = {}
 def _register_parsers():
     from .pymupdf import PyMuPDFParser
     PARSER_REGISTRY["pymupdf"] = PyMuPDFParser
+    from .tesseract_ocr import TesseractOCRParser
+    PARSER_REGISTRY["tesseract"] = TesseractOCRParser
     try:
         from .docling import DoclingParser
         PARSER_REGISTRY["docling"] = DoclingParser

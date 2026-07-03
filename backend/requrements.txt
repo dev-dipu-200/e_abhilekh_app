@@ -12,3 +12,5 @@ python-jose[cryptography]
 PyMuPDF
 httpx
 qdrant-client
+pytesseract
+Pillow

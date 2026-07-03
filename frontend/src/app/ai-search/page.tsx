@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { AppLayout } from '@/components/Layout/AppLayout'
 import { Button, Card, Spinner, Badge } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
 import { api } from '@/lib/api'
 import type { SearchResultItem } from '@/lib/types'
-import { Search, Languages, FileText, X, Filter, ChevronDown, Clock, BookOpen } from 'lucide-react'
+import { Search, Languages, FileText, X, Filter, ChevronDown, Clock, BookOpen, ArrowRight } from 'lucide-react'
+import { fetchSuggestions } from '@/lib/transliterate'
 
 export default function AISearchPage() {
   const { user } = useAuth()
@@ -29,6 +30,9 @@ export default function AISearchPage() {
   const [filterDept, setFilterDept] = useState('')
   const [filterDocType, setFilterDocType] = useState('')
   const [filterYear, setFilterYear] = useState('')
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [suggestIndex, setSuggestIndex] = useState(-1)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!orgId) return
@@ -64,11 +68,71 @@ export default function AISearchPage() {
     }
   }, [query, orgId, language, filterDept, filterDocType, filterYear])
 
-  const handleSearch = () => doSearch(1)
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setQuery(e.target.value)
+    if (e.target.value.endsWith(' ')) setSuggestions([])
+  }
+
+  const handleSpace = async () => {
+    const words = query.split(/\s+/)
+    const lastWord = words[words.length - 1]
+    if (!lastWord || /[\u0900-\u097F]/.test(lastWord) || language !== 'hi') {
+      setSuggestions([])
+      setQuery(q => q + ' ')
+      return
+    }
+    setQuery(q => q + ' ')
+    const sugs = await fetchSuggestions(lastWord)
+    if (sugs.length) {
+      setSuggestions(sugs)
+      setSuggestIndex(0)
+    } else {
+      setSuggestions([])
+    }
+  }
+
+  const applySuggestion = (sug: string) => {
+    const words = query.replace(/\s+$/, '').split(/\s+/)
+    words[words.length - 1] = sug
+    setQuery(words.join(' ') + ' ')
+    setSuggestions([])
+    setSuggestIndex(-1)
+    inputRef.current?.focus()
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (suggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSuggestIndex(prev => Math.min(prev + 1, suggestions.length - 1))
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSuggestIndex(prev => Math.max(prev - 1, 0))
+        return
+      }
+      if (e.key === 'Enter' && suggestIndex >= 0) {
+        e.preventDefault()
+        applySuggestion(suggestions[suggestIndex])
+        return
+      }
+      if (e.key === 'Tab' && suggestIndex >= 0) {
+        e.preventDefault()
+        applySuggestion(suggestions[suggestIndex])
+        return
+      }
+    }
+    if (language === 'hi' && e.key === ' ' && !e.repeat) {
+      e.preventDefault()
+      handleSpace()
+      return
+    }
     if (e.key === 'Enter') handleSearch()
+    if (e.key === 'Escape') setSuggestions([])
   }
+
+  const handleSearch = () => doSearch(1)
 
   const loadMore = () => doSearch(page + 1, true)
 
@@ -79,6 +143,17 @@ export default function AISearchPage() {
   }
 
   const hasFilters = filterDept || filterDocType || filterYear
+
+  const highlightMatches = (text: string) => {
+    if (!query.trim()) return text
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const parts = text.split(new RegExp(`(${escaped})`, 'gi'))
+    return parts.map((part, i) =>
+      part.toLowerCase() === query.toLowerCase()
+        ? <span key={i} className="text-orange-600 bg-orange-50 font-medium rounded px-0.5">{part}</span>
+        : part
+    )
+  }
 
   return (
     <AppLayout>
@@ -112,14 +187,36 @@ export default function AISearchPage() {
             <div className="flex gap-3">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={handleKeyDown}
+                <input ref={inputRef} type="text" value={query} onChange={handleInputChange} onKeyDown={handleKeyDown}
+                  lang={language === 'hi' ? 'hi' : 'en'} dir={language === 'hi' ? 'auto' : 'ltr'}
                   placeholder={language === 'en' ? 'Search documents by content...' : 'दस्तावेज़ सामग्री खोजें...'}
                   className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+                {/* Transliteration suggestions */}
+                {suggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+                    {suggestions.map((sug, i) => (
+                      <button key={i} onClick={() => applySuggestion(sug)}
+                        onMouseEnter={() => setSuggestIndex(i)}
+                        className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 transition-colors ${i === suggestIndex ? 'bg-primary-50 text-primary-700' : 'text-gray-700 hover:bg-gray-50'}`}>
+                        <ArrowRight className={`h-3 w-3 ${i === suggestIndex ? 'text-primary-500' : 'text-gray-300'}`} />
+                        <span className="text-base">{sug}</span>
+                      </button>
+                    ))}
+                    <p className="px-4 py-1.5 text-xs text-gray-400 border-t border-gray-100 bg-gray-50/50">
+                      ↑↓ Navigate · Enter/Tab select · Esc close
+                    </p>
+                  </div>
+                )}
               </div>
               <Button onClick={handleSearch} disabled={loading || !query.trim()}>
                 {loading ? <Spinner /> : <><Search className="h-4 w-4" /> Run Smart Search</>}
               </Button>
             </div>
+            {language === 'hi' && (
+              <p className="text-xs text-gray-400 flex items-center gap-1">
+                <Languages className="h-3 w-3" /> हिंदी · type & press Space to transliterate
+              </p>
+            )}
 
             {/* Filter Panel */}
             {showFilters && (
@@ -184,14 +281,14 @@ export default function AISearchPage() {
 
               {results.map((item) => (
                 <Card key={item.chunk_id}>
-                  <div className="space-y-2">
+                  <button onClick={() => router.push(`/files/${item.document_id}?page=${item.page_number || 1}`)}
+                    className="w-full text-left space-y-2 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded-lg">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-2 min-w-0">
                         <FileText className="h-4 w-4 text-primary-600 shrink-0 mt-0.5" />
-                        <button onClick={() => router.push(`/files/${item.document_id}`)}
-                          className="font-medium text-sm text-gray-900 hover:text-primary-600 text-left truncate">
+                        <span className="font-medium text-sm text-gray-900 hover:text-primary-600 truncate">
                           {item.document_subject || `Document ${item.document_id.slice(0, 12)}...`}
-                        </button>
+                        </span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <Badge variant={item.match_type === 'exact' ? 'green' : 'blue'}>
@@ -202,7 +299,7 @@ export default function AISearchPage() {
                         </span>
                       </div>
                     </div>
-                    <p className="text-sm text-gray-600 line-clamp-3 leading-relaxed">{item.content}</p>
+                    <p className="text-sm text-gray-600 line-clamp-3 leading-relaxed">{highlightMatches(item.content)}</p>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400">
                       {item.file_number && <span>File No: {item.file_number}</span>}
                       {item.department && <span>Dept: {item.department}</span>}
@@ -210,7 +307,7 @@ export default function AISearchPage() {
                       {item.page_number != null && <span>Page: {item.page_number}</span>}
                       {item.file_date && <span>Date: {item.file_date}</span>}
                     </div>
-                  </div>
+                  </button>
                 </Card>
               ))}
 

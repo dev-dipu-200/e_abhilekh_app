@@ -62,36 +62,42 @@ def process_document_file(self, document_id: str):
         session.commit()
 
         raw_text = result.get("raw_text") or ""
+        pages = result.get("pages") or []
         if raw_text.strip():
             try:
-                chunks_data = _chunk_text(raw_text)
                 chunk_texts = []
                 qdrant_chunks = []
-                for i, (chunk_text, page) in enumerate(chunks_data):
-                    chunk = DocumentChunk(
-                        document_id=document_id,
-                        content=chunk_text,
-                        chunk_index=i,
-                        page_number=page if page else None,
-                    )
-                    session.add(chunk)
-                    session.flush()
-                    chunk_texts.append(chunk_text)
-                    qdrant_chunks.append({
-                        "id": chunk.id,
-                        "chunk_id": chunk.id,
-                        "content": chunk_text,
-                        "page_number": page if page else None,
-                        "subject": doc.subject,
-                        "organization_id": doc.organization_id,
-                        "document_id": document_id,
-                    })
+                chunk_index = 0
+                for page_num, page_text in enumerate(pages):
+                    if not page_text.strip():
+                        continue
+                    page_chunks = _chunk_text(page_text)
+                    for chunk_text, _ in page_chunks:
+                        chunk = DocumentChunk(
+                            document_id=document_id,
+                            content=chunk_text,
+                            chunk_index=chunk_index,
+                            page_number=page_num + 1,
+                        )
+                        session.add(chunk)
+                        session.flush()
+                        chunk_texts.append(chunk_text)
+                        qdrant_chunks.append({
+                            "id": chunk.id,
+                            "chunk_id": chunk.id,
+                            "content": chunk_text,
+                            "page_number": page_num + 1,
+                            "subject": doc.subject,
+                            "organization_id": doc.organization_id,
+                            "document_id": document_id,
+                        })
+                        chunk_index += 1
 
-                embeddings = encode_documents(chunk_texts)
-                for qc, emb in zip(qdrant_chunks, embeddings):
-                    qc["vector"] = emb
-
-                upsert_chunks(qdrant_chunks)
+                if chunk_texts:
+                    embeddings = encode_documents(chunk_texts)
+                    for qc, emb in zip(qdrant_chunks, embeddings):
+                        qc["vector"] = emb
+                    upsert_chunks(qdrant_chunks)
                 session.commit()
             except Exception:
                 import traceback

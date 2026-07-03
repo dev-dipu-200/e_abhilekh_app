@@ -7,6 +7,8 @@ RUN pip install --no-cache-dir --user -r requrements.txt
 
 FROM python:3.11-slim
 
+RUN apt-get update -qq && apt-get install -y -qq tesseract-ocr tesseract-ocr-hin && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY --from=builder /root/.local /root/.local

@@ -12,7 +12,7 @@ VECTOR_SIZE = settings.OLLAMA_EMBEDDING_DIMENSIONS
 
 @lru_cache(maxsize=None)
 def _get_client() -> QdrantClient:
-    return QdrantClient(url=settings.QDRANT_URL)
+    return QdrantClient(url=settings.QDRANT_URL, timeout=120)
 
 
 def ensure_collection():
@@ -50,7 +50,11 @@ def upsert_chunks(chunks: list[dict]):
                 },
             )
         )
-    client.upsert(collection_name=COLLECTION_NAME, points=points)
+    # Batch in groups of 10 to avoid Qdrant timeouts
+    batch_size = 10
+    for i in range(0, len(points), batch_size):
+        batch = points[i : i + batch_size]
+        client.upsert(collection_name=COLLECTION_NAME, points=batch)
 
 
 def delete_document_chunks(document_id: str):

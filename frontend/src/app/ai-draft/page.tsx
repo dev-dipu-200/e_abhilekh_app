@@ -7,7 +7,8 @@ import { useAuth } from '@/context/AuthContext'
 import { api } from '@/lib/api'
 import { toast } from '@/lib/toast'
 import type { DraftTemplate, Document } from '@/lib/types'
-import { FileText, Send, Save, Download, Copy, Check, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, List, ListOrdered, ChevronRight, BookOpen } from 'lucide-react'
+import { FileText, Send, Save, Download, Copy, Check, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, List, ListOrdered, ArrowRight, BookOpen, Languages } from 'lucide-react'
+import { fetchSuggestions, transliterateWord } from '@/lib/transliterate'
 
 const TONE_OPTIONS = [
   { value: 'formal', label: 'Formal' },
@@ -41,6 +42,14 @@ export default function AIDraftPage() {
   const [savedId, setSavedId] = useState<string | null>(null)
   const [showEditor, setShowEditor] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [suggestIndex, setSuggestIndex] = useState(-1)
+  const [isInstructionsHindi, setIsInstructionsHindi] = useState(false)
+  const [isTranslitMode, setIsTranslitMode] = useState(false)
+  const [editorSuggestions, setEditorSuggestions] = useState<string[]>([])
+  const [editorSugIndex, setEditorSugIndex] = useState(-1)
+  const [editingWord, setEditingWord] = useState('')
+  const instructRef = useRef<HTMLTextAreaElement>(null)
 
   const draftEndRef = useRef<HTMLDivElement>(null)
 
@@ -176,6 +185,60 @@ export default function AIDraftPage() {
     }
   }
 
+  const handleInstructionsSpace = async () => {
+    const words = instructions.split(/\s+/)
+    const lastWord = words[words.length - 1]
+    if (!lastWord || /[\u0900-\u097F]/.test(lastWord)) {
+      setSuggestions([])
+      setInstructions(i => i + ' ')
+      return
+    }
+    setInstructions(i => i + ' ')
+    const sugs = await fetchSuggestions(lastWord)
+    if (sugs.length) {
+      setSuggestions(sugs)
+      setSuggestIndex(0)
+    } else {
+      setSuggestions([])
+    }
+  }
+
+  const applyInstructionSuggestion = (sug: string) => {
+    const words = instructions.replace(/\s+$/, '').split(/\s+/)
+    words[words.length - 1] = sug
+    setInstructions(words.join(' ') + ' ')
+    setSuggestions([])
+    setSuggestIndex(-1)
+    instructRef.current?.focus()
+  }
+
+  const handleEditorSpace = async () => {
+    const words = draftText.split(/\s+/)
+    const lastWord = words[words.length - 1]
+    if (!lastWord || /[\u0900-\u097F]/.test(lastWord)) {
+      setEditorSuggestions([])
+      setDraftText(d => d + ' ')
+      return
+    }
+    setEditingWord(lastWord)
+    setDraftText(d => d + ' ')
+    const sugs = await fetchSuggestions(lastWord)
+    if (sugs.length) {
+      setEditorSuggestions(sugs)
+      setEditorSugIndex(0)
+    } else {
+      setEditorSuggestions([])
+    }
+  }
+
+  const applyDraftSuggestion = (sug: string) => {
+    const words = draftText.replace(/\s+$/, '').split(/\s+/)
+    words[words.length - 1] = sug
+    setDraftText(words.join(' ') + ' ')
+    setEditorSuggestions([])
+    setEditorSugIndex(-1)
+  }
+
   const selectedDocData = documents.find(d => d.id === selectedDoc)
 
   const TEMPLATE_ORDER = ['letter', 'circular', 'notice', 'rti', 'information']
@@ -236,18 +299,61 @@ export default function AIDraftPage() {
 
                 <div>
                   <label className="form-label">
-                    {language === 'en' ? 'Key Points / Instructions' : 'मुख्य बिंदु / निर्देश'}
+                    {isInstructionsHindi ? 'मुख्य बिंदु / निर्देश' : 'Key Points / Instructions'}
                     {selectedTemplate === 'information' && <span className="text-red-500 ml-1">*</span>}
                   </label>
                   <div className="flex gap-2 mb-2">
-                    <button onClick={() => setLanguage('en')}
-                      className={`text-xs px-2 py-1 rounded ${language === 'en' ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-500'}`}>English</button>
-                    <button onClick={() => setLanguage('hi')}
-                      className={`text-xs px-2 py-1 rounded ${language === 'hi' ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-500'}`}>हिन्दी</button>
+                    <button onClick={() => setIsInstructionsHindi(false)}
+                      className={`text-xs px-2 py-1 rounded ${!isInstructionsHindi ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-500'}`}>English</button>
+                    <button onClick={() => setIsInstructionsHindi(true)}
+                      className={`text-xs px-2 py-1 rounded ${isInstructionsHindi ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-500'}`}>हिन्दी</button>
                   </div>
-                  <textarea value={instructions} onChange={(e) => setInstructions(e.target.value)}
-                    placeholder={language === 'en' ? 'Enter key points, requirements, or specific instructions...' : 'मुख्य बिंदु, आवश्यकताएं या विशेष निर्देश दर्ज करें...'}
-                    rows={4} className="form-input resize-none" />
+                  <div className="relative">
+                    <textarea ref={instructRef} value={instructions}
+                      onChange={(e) => {
+                        setInstructions(e.target.value)
+                        if (e.target.value.endsWith(' ')) setSuggestions([])
+                      }}
+                      onKeyDown={(e) => {
+                        if (suggestions.length > 0) {
+                          if (e.key === 'ArrowDown') { e.preventDefault(); setSuggestIndex(p => Math.min(p+1, suggestions.length-1)); return }
+                          if (e.key === 'ArrowUp') { e.preventDefault(); setSuggestIndex(p => Math.max(p-1, 0)); return }
+                          if ((e.key === 'Enter' || e.key === 'Tab') && suggestIndex >= 0) {
+                            e.preventDefault()
+                            applyInstructionSuggestion(suggestions[suggestIndex])
+                            return
+                          }
+                        }
+                        if (isInstructionsHindi && e.key === ' ' && !e.repeat) {
+                          e.preventDefault()
+                          handleInstructionsSpace()
+                          return
+                        }
+                        if (e.key === 'Escape') setSuggestions([])
+                      }}
+                      placeholder={!isInstructionsHindi ? 'Enter key points, requirements, or specific instructions...' : 'मुख्य बिंदु, आवश्यकताएं या विशेष निर्देश दर्ज करें...'}
+                      rows={4} className="form-input resize-none" />
+                    {suggestions.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+                        {suggestions.map((sug, i) => (
+                          <button key={i} onClick={() => applyInstructionSuggestion(sug)}
+                            onMouseEnter={() => setSuggestIndex(i)}
+                            className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${i === suggestIndex ? 'bg-primary-50 text-primary-700' : 'text-gray-700 hover:bg-gray-50'}`}>
+                            <ArrowRight className={`h-3 w-3 ${i === suggestIndex ? 'text-primary-500' : 'text-gray-300'}`} />
+                            <span className="text-base">{sug}</span>
+                          </button>
+                        ))}
+                        <p className="px-4 py-1.5 text-xs text-gray-400 border-t border-gray-100 bg-gray-50/50">
+                          ↑↓ Navigate · Enter/Tab select · Esc close
+                        </p>
+                      </div>
+                    )}
+                    {isInstructionsHindi && (
+                      <p className="text-xs text-gray-400 flex items-center gap-1 mt-1">
+                        <Languages className="h-3 w-3" /> हिंदी · type & press Space to transliterate
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -331,15 +437,52 @@ export default function AIDraftPage() {
                         <span className="w-px h-4 bg-gray-200 mx-1" />
                         <button className="p-1.5 rounded hover:bg-gray-100 text-gray-600"><List className="h-3.5 w-3.5" /></button>
                         <button className="p-1.5 rounded hover:bg-gray-100 text-gray-600"><ListOrdered className="h-3.5 w-3.5" /></button>
+                        <span className="w-px h-4 bg-gray-200 mx-1" />
+                        <button onClick={() => setIsTranslitMode(!isTranslitMode)}
+                          className={`p-1.5 rounded text-xs px-2 ${isTranslitMode ? 'bg-primary-100 text-primary-700' : 'hover:bg-gray-100 text-gray-500'}`}>
+                          {isTranslitMode ? 'देवनागरी' : 'EN'}
+                        </button>
                       </div>
                     )}
-                    <div className="prose prose-sm max-w-none">
+                    <div className="prose prose-sm max-w-none relative">
                       <textarea
                         value={draftText}
-                        onChange={(e) => setDraftText(e.target.value)}
+                        onChange={(e) => {
+                          setDraftText(e.target.value)
+                          if (e.target.value.endsWith(' ')) setEditorSuggestions([])
+                        }}
+                        onKeyDown={(e) => {
+                          if (editorSuggestions.length > 0) {
+                            if (e.key === 'ArrowDown') { e.preventDefault(); setEditorSugIndex(p => Math.min(p+1, editorSuggestions.length-1)); return }
+                            if (e.key === 'ArrowUp') { e.preventDefault(); setEditorSugIndex(p => Math.max(p-1, 0)); return }
+                            if ((e.key === 'Enter' || e.key === 'Tab') && editorSugIndex >= 0) {
+                              e.preventDefault()
+                              applyDraftSuggestion(editorSuggestions[editorSugIndex])
+                              return
+                            }
+                          }
+                          if (isTranslitMode && e.key === ' ' && !e.repeat) {
+                            e.preventDefault()
+                            handleEditorSpace()
+                            return
+                          }
+                          if (e.key === 'Escape') setEditorSuggestions([])
+                        }}
                         className="w-full min-h-[300px] border-0 resize-none text-sm text-gray-800 leading-relaxed focus:outline-none font-mono"
                         style={{ lineHeight: '1.8' }}
                       />
+                      {editorSuggestions.length > 0 && (
+                        <div className="absolute top-0 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+                          {editorSuggestions.map((sug, i) => (
+                            <button key={i} onClick={() => applyDraftSuggestion(sug)}
+                              onMouseEnter={() => setEditorSugIndex(i)}
+                              className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${i === editorSugIndex ? 'bg-primary-50 text-primary-700' : 'text-gray-700 hover:bg-gray-50'}`}>
+                              <ArrowRight className={`h-3 w-3 ${i === editorSugIndex ? 'text-primary-500' : 'text-gray-300'}`} />
+                              <span className="text-base">{sug}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div ref={draftEndRef} />
                   </div>

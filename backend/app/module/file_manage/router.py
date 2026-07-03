@@ -1,6 +1,7 @@
 import aiofiles
 import os
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.base import get_db
@@ -78,6 +79,18 @@ async def delete_document(doc_id: str, db: AsyncSession = Depends(get_db)):
     if not await file_service.delete_document(db, doc_id):
         raise HTTPException(status_code=404, detail="Document not found")
     return SuccessResponse(result=None, message="Document deleted successfully", status_code=200)
+
+
+@router.get("/documents/{doc_id}/download")
+async def download_document(doc_id: str, db: AsyncSession = Depends(get_db)):
+    from app.module.file_manage.service import get_document
+    doc = await get_document(db, doc_id)
+    if not doc or not doc.file:
+        raise HTTPException(status_code=404, detail="Document or file not found")
+    if not os.path.exists(doc.file):
+        raise HTTPException(status_code=404, detail="File not found on disk")
+    filename = os.path.basename(doc.file)
+    return FileResponse(doc.file, media_type="application/pdf", filename=filename)
 
 
 @router.get("/folders")

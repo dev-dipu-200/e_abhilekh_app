@@ -1,7 +1,9 @@
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from app.database.base import engine, Base
@@ -30,6 +32,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="E-Abhilekh API", version="1.0.0", lifespan=lifespan)
+
+os.makedirs("previews", exist_ok=True)
+app.mount("/previews", StaticFiles(directory="previews"), name="previews")
 
 origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
 
