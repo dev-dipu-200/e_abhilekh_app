@@ -7,20 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.base import get_db
 from app.dependencies import get_current_user
 from app.database.user_model import User
-from app.database.file_model import Document
 from app.module.file_manage.schema import DocumentCreate, DocumentUpdate, DocumentResponse, FolderCreate, FolderResponse, SearchQuery, SearchResponse
 from app.module.file_manage import service as file_service
 from app.module.file_manage.tasks import process_document_file, generate_document_preview
 from app.utils.response import SuccessResponse
 
 router = APIRouter(prefix="/files", tags=["File Management"])
-
-
-def _populate_relations(resp: DocumentResponse, doc: Document) -> DocumentResponse:
-    resp.department_name = doc.department.name if doc.department else None
-    resp.document_type_name = doc.document_type.name if doc.document_type else None
-    resp.organization_name = doc.organization.name if doc.organization else None
-    return resp
 
 
 def _populate_previews(resp: DocumentResponse, base_url: str = "") -> DocumentResponse:
@@ -39,8 +31,13 @@ async def list_documents(organization_id: str, request: Request, folder_id: str 
     docs = await file_service.get_documents(db, organization_id, folder_id)
     results = []
     for d in docs:
+        dept_name = d.department.name if d.department else None
+        doctype_name = d.document_type.name if d.document_type else None
+        org_name = d.organization.name if d.organization else None
         resp = DocumentResponse.model_validate(d)
-        resp = _populate_relations(resp, d)
+        resp.department_name = dept_name
+        resp.document_type_name = doctype_name
+        resp.organization_name = org_name
         resp = _populate_previews(resp, base)
         results.append(resp)
     return SuccessResponse(result=results, message="Documents retrieved successfully", status_code=200)
@@ -52,8 +49,15 @@ async def get_document(doc_id: str, request: Request, db: AsyncSession = Depends
     doc = await file_service.get_document(db, doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    dept_name = doc.department.name if doc.department else None
+    doctype_name = doc.document_type.name if doc.document_type else None
+    org_name = doc.organization.name if doc.organization else None
+
     resp = DocumentResponse.model_validate(doc)
-    resp = _populate_relations(resp, doc)
+    resp.department_name = dept_name
+    resp.document_type_name = doctype_name
+    resp.organization_name = org_name
     resp = _populate_previews(resp, base)
     return SuccessResponse(result=resp, message="Document retrieved successfully", status_code=200)
 

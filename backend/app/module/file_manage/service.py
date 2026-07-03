@@ -29,6 +29,7 @@ async def get_document(db: AsyncSession, doc_id: str):
             joinedload(Document.department),
             joinedload(Document.document_type),
             joinedload(Document.folder),
+            joinedload(Document.organization),
         ).where(Document.id == doc_id)
     )
     return result.unique().scalar_one_or_none()
