@@ -4,8 +4,9 @@ import uuid
 import httpx
 from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text as sa_text
 from app.database.file_model import Document, GeneratedDraft, Attachment, ActivityLog
+from app.database.user_model import Organization, User
 from app.utils.ollama_client import generate, chat
 from app.utils.qdrant_store import search as qdrant_search
 from app.settings.config import settings
@@ -19,35 +20,107 @@ TEMPLATES = [
     {"id": "information", "name": "Information", "label": "information", "description": "Draft an information memorandum", "icon": "file-text"},
 ]
 
-SYSTEM_PROMPTS = {
-    "letter": "You are a government letter drafting assistant. Draft formal official letters in the specified language and tone. Use proper government letter format with subject, reference, body, and signature block.",
-    "circular": "You are a government circular drafting assistant. Draft department circulars in the specified language and tone. Include subject, preamble, instructions, and distribution list.",
-    "notice": "You are a government notice drafting assistant. Draft public or internal notices in the specified language and tone. Include heading, date, body, and authority signature.",
-    "rti": "You are an RTI reply drafting assistant. Draft replies to RTI applications in the specified language and tone. Include reference to the RTI application, point-wise responses, and appellate authority information.",
-    "information": "You are an information memorandum drafting assistant. Draft information notes in the specified language and tone. Include subject, reference, detailed information, and conclusion.",
+TEMPLATE_GUIDANCE = {
+    "letter": "Use a classic official letter structure with recipient lines, a concise subject line that describes the administrative matter, formal salutation, two to four body paragraphs, and optional copy-to entries. Do not use a person's name as the subject unless the source explicitly makes that the subject.",
+    "circular": "Draft this as a department circular. Keep a short opening, three to five clear numbered directives, and a short closure. Use formal administrative Hindi when language is hi.",
+    "notice": "Draft this as a notice. Keep it concise, announcement-focused, and suitable for display on an office notice board. Use a clear notice title and avoid story-like paragraphs.",
+    "rti": "Draft this as an RTI reply under the RTI Act, 2005. Use point-wise reply_items, answer the query directly, and mention the legal or procedural note in legal_note. Do not invent applicant details.",
+    "information": "Draft this as an informative office document. Base the content on the analysed results from the key points/instructions, use a clear subject, a short context-setting opening, and well-structured factual paragraphs or bullet points. Keep it informative rather than directive.",
 }
 
-TEMPLATE_FORMATS = {
-    "letter": {
-        "format": "government_letter",
-        "sections": ["subject", "reference", "preamble", "body", "conclusion", "signature"],
-    },
-    "circular": {
-        "format": "government_circular",
-        "sections": ["subject", "reference", "preamble", "instructions", "distribution"],
-    },
-    "notice": {
-        "format": "government_notice",
-        "sections": ["heading", "date", "body", "authority"],
-    },
-    "rti": {
-        "format": "rti_reply",
-        "sections": ["reference", "preliminary", "point_wise_responses", "appellate_info", "conclusion"],
-    },
-    "information": {
-        "format": "information_memorandum",
-        "sections": ["subject", "reference", "details", "conclusion"],
-    },
+SYSTEM_PROMPTS = {
+    "letter": """You are a government letter drafting assistant. Write a professional official letter in the specified language.
+
+Use these EXACT labels: Header:, Subject:, Salutation:, Body:, Closure:, Signature:.
+
+CRITICAL RULES:
+1. NEVER use bracket placeholders like [Signature], [Name], [Date], [Designation], [Placeholder]. Fill in every field with concrete content based on the reference context provided.
+2. The subject must describe the action/matter, not a person's name.
+3. Write at least 200 words for the Body. Stop after the Signature section.
+4. Do NOT wrap the draft in JSON. Just output the raw draft text with the labels above.
+5. Do NOT use greetings like Namaste, Dear, etc.
+6. No markdown, no code fences, no JSON markers.""",
+
+    "circular": """You are a government circular drafting assistant. Draft a department circular in the specified language.
+
+Use these EXACT labels: Header:, Subject:, Preamble:, Directives:, Closure:, Distribution:.
+
+CRITICAL RULES:
+1. NEVER use bracket placeholders. Fill every field with concrete content from the reference context.
+2. Use 3 to 5 clear numbered directives in the Directives section.
+3. Write at least 200 words total. Stop after Distribution.
+4. Do NOT wrap the draft in JSON. Just output the raw draft text.
+5. No markdown, no code fences, no JSON markers.""",
+
+    "notice": """You are a government notice drafting assistant. Draft a public or internal notice in the specified language.
+
+Use these EXACT labels: Notice Title:, Date:, Body:, Issued By:.
+
+CRITICAL RULES:
+1. NEVER use bracket placeholders. Fill every field with concrete content from the reference context.
+2. Keep it concise and announcement-style. Avoid story-like paragraphs.
+3. Stop after the Issued By section.
+4. Do NOT wrap the draft in JSON. Just output the raw draft text.
+5. No markdown, no code fences, no JSON markers.""",
+
+    "rti": """You are an RTI reply drafting assistant under the RTI Act, 2005. Draft a reply to an RTI application in the specified language.
+
+Use these EXACT labels: Reference:, Date:, From:, Subject:, Preliminary:, Point-wise Replies:, Legal Note:, Appeal Note:, Signatory:.
+
+CRITICAL RULES:
+1. NEVER use bracket placeholders. Fill every field with concrete content.
+2. Answer point-wise and synthesize records entirely in the selected language.
+3. Use DD/MM/YYYY date format.
+4. Include first appeal details under Section 19(1).
+5. Stop after the Signatory section.
+6. Do NOT wrap the draft in JSON. Just output the raw draft text.
+7. No markdown, no code fences, no JSON markers.""",
+
+    "information": """You are an information memorandum drafting assistant. Draft an informative office document in the specified language.
+
+Use these EXACT labels: Subject:, Reference:, Details:, Conclusion:.
+
+CRITICAL RULES:
+1. NEVER use bracket placeholders. Fill every field with concrete content from the reference context.
+2. Base the content on the analysed results from key points/instructions.
+3. Keep it informative rather than directive. Use bullet points where appropriate.
+4. Stop after the Conclusion section.
+5. Do NOT wrap the draft in JSON. Just output the raw draft text.
+6. No markdown, no code fences, no JSON markers.""",
+}
+
+HINDI_LANGUAGE_RULES = """LANGUAGE RULES (Hindi mode):
+- Every visible field MUST be in formal Hindi written in Devanagari script only.
+- NO English in brackets. Do NOT write 'Hindi (English)'.
+- Transliterate names and places into Devanagari (e.g., 'Imran' -> 'इमरान').
+- Keep English ONLY for exact reference numbers (e.g., AUTO-123) and specific statute names.
+- Translate all designations, departments, and body text into formal government Hindi.
+- Use standard international/Latin numerals (0-9) for all numbers, years, and dates.
+- Always format dates using hyphens (DD-MM-YYYY). NEVER use slashes.
+- Never provide English translations in brackets. Use ONLY Devanagari Hindi.
+
+TERMINOLOGY (Hindi):
+- PWD = लोक निर्माण विभाग (NEVER use "पवित्र")
+- Public Works Department = लोक निर्माण विभाग
+- Office Order = कार्यालय आदेश
+- Promotion = पदोन्नति
+- Use professional Hindi words: पत्राचार, अनुपालन, निर्देश, पदोन्नति
+
+Write in Hindi. Do not use greetings like नमस्ते or प्रिय."""
+
+ENGLISH_LANGUAGE_RULES = """LANGUAGE RULES (English mode):
+- Every visible field must be in professional English.
+- Do not output any Devanagari characters anywhere in the visible draft.
+- Reconstruct the draft from source facts and evidence items in professional English.
+- If a source field is in Hindi script, rewrite it in English script or translate it.
+- Always format dates using hyphens (DD-MM-YYYY) instead of slashes.
+- Use professional formal English terminology.
+
+Write in English. No greetings like Namaste or Dear."""
+
+LANGUAGE_TERMINOLOGY = {
+    "hi": HINDI_LANGUAGE_RULES,
+    "en": ENGLISH_LANGUAGE_RULES,
 }
 
 
@@ -90,14 +163,29 @@ async def build_draft_context(
     ref_doc = await get_document_with_relations(db, reference_id)
     ref_context = ""
     subject = ""
+
+    org_name = ""
+    if organization_id:
+        r = await db.execute(sa_text(f"SELECT name FROM organizations WHERE id = '{organization_id}'"))
+        row = r.fetchone()
+        if row:
+            org_name = row[0]
+
     if ref_doc:
         subject = ref_doc.subject or ""
+        designation = ref_doc.designation or ""
+        file_number = ref_doc.file_number or ""
+        dept_name = ref_doc.department.name if ref_doc.department else "N/A"
+        doctype_name = ref_doc.document_type.name if ref_doc.document_type else "N/A"
+
         ref_context = (
             f"Reference Document: {ref_doc.file.split('/')[-1] if ref_doc.file else 'Unknown'}\n"
-            f"Subject: {ref_doc.subject or 'N/A'}\n"
-            f"Department: {ref_doc.department.name if ref_doc.department else 'N/A'}\n"
-            f"Document Type: {ref_doc.document_type.name if ref_doc.document_type else 'N/A'}\n"
-            f"File Number: {ref_doc.file_number or 'N/A'}\n"
+            f"Subject: {subject or 'N/A'}\n"
+            f"Department: {dept_name}\n"
+            f"Organization: {org_name}\n"
+            f"Document Type: {doctype_name}\n"
+            f"File Number: {file_number or 'N/A'}\n"
+            f"Designation: {designation or 'N/A'}\n"
         )
 
     relevant_records = await get_relevant_records(subject or reference_id, organization_id)
@@ -105,36 +193,60 @@ async def build_draft_context(
     if relevant_records:
         records_lines = []
         for r in relevant_records:
-            records_lines.append(f"- {r.document_subject or 'Doc'}: {r.content[:200]}")
+            records_lines.append(f"- {r.document_subject or 'Doc'}: {r.content[:300]}")
         records_text = "\n".join(records_lines)
 
+    visible_language = "Hindi" if language == "hi" else "English"
+    template_name = next((t["name"] for t in TEMPLATES if t["id"] == template_id), template_id)
+
     prompt_parts = [
-        f"Draft Type: {template_id}",
-        f"Language: {'Hindi' if language == 'hi' else 'English'}",
+        f"Selected format: {template_name}",
+        f"Target language: {visible_language}",
         f"Tone: {tone}",
         "",
         "=== REFERENCE DOCUMENT ===",
         ref_context,
     ]
     if records_text:
-        prompt_parts.append("=== RELEVANT RECORDS ===")
+        prompt_parts.append("=== RELEVANT SEARCH RECORDS (from indexed documents) ===")
         prompt_parts.append(records_text)
     if instructions:
         prompt_parts.append("=== USER INSTRUCTIONS ===")
         prompt_parts.append(instructions)
 
+    prompt_parts.append("")
+    prompt_parts.append(f"=== TEMPLATE GUIDANCE ({template_name}) ===")
+    prompt_parts.append(TEMPLATE_GUIDANCE.get(template_id, ""))
+
+    prompt_parts.append("")
+    prompt_parts.append("=== LANGUAGE RULES ===")
+    prompt_parts.append(LANGUAGE_TERMINOLOGY.get(language, ENGLISH_LANGUAGE_RULES))
+
+    prompt_parts.append("")
+    prompt_parts.append("=== STRUCTURE LABELS ===")
     prompt_parts.append(
-        "\n=== OUTPUT FORMAT ===\n"
-        "Return a structured JSON with these fields:\n"
-        "{\n"
-        '  "draft_text": "Full draft text in the specified language",\n'
-        '  "subject": "Document subject",\n'
-        '  "sections": {"section_name": "content"}\n'
-        "}\n"
-        "Write the draft in the exact language specified. "
-        "If Hindi, use Devanagari script. "
-        "Generate a fresh, original draft based on the reference document and instructions. "
-        "Do not simply copy the source document."
+        "Use these EXACT labels in your output (one per line):\n"
+        "Header:\n"
+        "Subject:\n"
+        "Salutation:\n"
+        "Body:\n"
+        "Closure:\n"
+        "Signature:\n"
+    )
+
+    prompt_parts.append("")
+    prompt_parts.append(
+        "=== CRITICAL OUTPUT RULES ===\n"
+        "1. NEVER use bracket placeholders like [Signature], [Name], [Date], [Designation], [Placeholder], [OM Number], etc. Fill in every field with concrete content from the reference context.\n"
+        "2. If the reference context does not provide a specific value, infer it logically or leave it out entirely. Do NOT write placeholder brackets.\n"
+        f"3. The subject must describe the action/matter, not a person's name.\n"
+        f"4. Write at least 200 words for the body. Make the draft complete and actionable.\n"
+        "5. Do NOT wrap the entire draft in JSON. Output raw text only, with the labels above.\n"
+        "6. Do NOT use markdown, code fences, or any JSON delimiters.\n"
+        "7. Do NOT include greetings like Namaste, Dear, प्रिय, नमस्ते.\n"
+        "8. Base the draft primarily on the REFERENCE DOCUMENT. Use the search records as supporting evidence.\n"
+        "9. Generate a fresh, original draft. Do not copy the reference document verbatim.\n"
+        "10. Stop immediately after the Signature section."
     )
 
     return {
@@ -179,15 +291,6 @@ def generate_draft_non_stream(context: dict) -> str:
         system=context["system_prompt"],
         temperature=0.3,
     )
-
-
-def extract_draft_json(raw_text: str) -> dict:
-    try:
-        json_start = raw_text.index("{")
-        json_end = raw_text.rindex("}") + 1
-        return json.loads(raw_text[json_start:json_end])
-    except (ValueError, json.JSONDecodeError):
-        return {"draft_text": raw_text, "subject": "", "sections": {}}
 
 
 async def check_existing_draft(

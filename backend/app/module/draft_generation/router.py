@@ -90,14 +90,13 @@ async def generate_draft(
     )
 
     raw_output = draft_service.generate_draft_non_stream(context)
-    draft_data = draft_service.extract_draft_json(raw_output)
 
     records = context.get("relevant_records", [])
     return SuccessResponse(
         result=DraftGenerateResponse(
-            draft_text=draft_data.get("draft_text", raw_output),
-            draft_html=draft_data.get("draft_text", ""),
-            draft_json=json.dumps(draft_data),
+            draft_text=raw_output,
+            draft_html=raw_output,
+            draft_json=json.dumps({"draft_text": raw_output, "subject": context.get("subject", "")}),
             relevant_records=records,
             subject=context.get("subject", ""),
             template_id=data.template_id,

@@ -7,7 +7,7 @@ import { Button, Card, Spinner, Badge } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
 import { api } from '@/lib/api'
 import type { SearchResultItem } from '@/lib/types'
-import { Search, Languages, FileText, X, Filter, ChevronDown, Clock, BookOpen, ArrowRight } from 'lucide-react'
+import { Search, Languages, FileText, X, Filter, ChevronDown, Clock, BookOpen, ArrowRight, Sparkles } from 'lucide-react'
 import { fetchSuggestions } from '@/lib/transliterate'
 
 export default function AISearchPage() {
@@ -300,15 +300,20 @@ export default function AISearchPage() {
                       </div>
                     </div>
                     <p className="text-sm text-gray-600 line-clamp-3 leading-relaxed">{highlightMatches(item.content)}</p>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400">
-                      {item.file_number && <span>File No: {item.file_number}</span>}
-                      {item.department && <span>Dept: {item.department}</span>}
-                      {item.document_type && <span>Type: {item.document_type}</span>}
-                      {item.page_number != null && <span>Page: {item.page_number}</span>}
-                      {item.file_date && <span>Date: {item.file_date}</span>}
-                    </div>
-                  </button>
-                </Card>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400">
+                        {item.file_number && <span>File No: {item.file_number}</span>}
+                        {item.department && <span>Dept: {item.department}</span>}
+                        {item.document_type && <span>Type: {item.document_type}</span>}
+                        {item.page_number != null && <span>Page: {item.page_number}</span>}
+                        {item.file_date && <span>Date: {item.file_date}</span>}
+                      </div>
+                      <div className="pt-2">
+                        <Button variant="primary" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/ai-draft?document_id=${item.document_id}`) }}>
+                          <Sparkles className="h-3.5 w-3.5" /> Generate Draft
+                        </Button>
+                      </div>
+                    </button>
+                  </Card>
               ))}
 
               {hasMore && (

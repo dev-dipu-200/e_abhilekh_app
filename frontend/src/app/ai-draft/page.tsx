@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { AppLayout } from '@/components/Layout/AppLayout'
 import { Button, Card, Spinner } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
@@ -24,14 +25,15 @@ const TEMPLATE_ICONS: Record<string, string> = {
   information: 'ℹ️',
 }
 
-export default function AIDraftPage() {
+function AIDraftContent() {
   const { user } = useAuth()
   const orgId = user?.organization_id ?? ''
+  const searchParams = useSearchParams()
 
   const [templates, setTemplates] = useState<DraftTemplate[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
-  const [selectedDoc, setSelectedDoc] = useState<string>('')
+  const [selectedDoc, setSelectedDoc] = useState<string>(searchParams.get('document_id') || '')
   const [instructions, setInstructions] = useState('')
   const [language, setLanguage] = useState<'en' | 'hi'>('en')
   const [tone, setTone] = useState('formal')
@@ -510,5 +512,13 @@ export default function AIDraftPage() {
         </div>
       </div>
     </AppLayout>
+  )
+}
+
+export default function AIDraftPage() {
+  return (
+    <Suspense fallback={null}>
+      <AIDraftContent />
+    </Suspense>
   )
 }
