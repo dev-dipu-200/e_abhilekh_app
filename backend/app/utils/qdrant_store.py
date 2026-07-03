@@ -33,12 +33,9 @@ def upsert_chunks(chunks: list[dict]):
     client = _get_client()
     points = []
     for chunk in chunks:
-        raw_id = chunk["id"]
-        hex_part = raw_id.split("_", 1)[-1] if "_" in raw_id else raw_id
-        point_id = uuid.UUID(hex=hex_part) if len(hex_part) == 32 else raw_id
         points.append(
             models.PointStruct(
-                id=point_id,
+                id=str(uuid.uuid4()),
                 vector=chunk["vector"],
                 payload={
                     "document_id": chunk["document_id"],

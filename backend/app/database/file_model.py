@@ -23,10 +23,10 @@ class Priority(str, enum.Enum):
 
 
 class ProcessingState(str, enum.Enum):
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    DONE = "done"
-    FAILED = "failed"
+    PENDING = "PENDING"
+    IN_PROGRESS = "IN_PROGRESS"
+    DONE = "DONE"
+    FAILED = "FAILED"
 
 
 class Department(Base):

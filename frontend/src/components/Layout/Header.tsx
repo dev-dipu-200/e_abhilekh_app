@@ -2,6 +2,7 @@
 
 import { Menu, Bell, User, LogOut } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import { useLanguage } from '@/context/LanguageContext'
 
 interface HeaderProps {
   onMenuClick: () => void
@@ -10,6 +11,7 @@ interface HeaderProps {
 
 export function Header({ onMenuClick, title }: HeaderProps) {
   const { user, logout } = useAuth()
+  const { language, toggleLanguage, t } = useLanguage()
 
   return (
     <header className="sticky top-0 z-30 bg-white border-b border-gray-200">
@@ -25,6 +27,12 @@ export function Header({ onMenuClick, title }: HeaderProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={toggleLanguage}
+            className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+          >
+            {language === 'en' ? 'हिन्दी' : 'English'}
+          </button>
           <button className="p-2 rounded-lg hover:bg-gray-100 transition-colors relative">
             <Bell className="h-5 w-5 text-gray-500" />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
@@ -40,7 +48,7 @@ export function Header({ onMenuClick, title }: HeaderProps) {
           <button
             onClick={logout}
             className="p-2 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors text-gray-400"
-            title="Logout"
+            title={t('header.logout')}
           >
             <LogOut className="h-5 w-5" />
           </button>

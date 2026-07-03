@@ -5,17 +5,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 import uuid
 from app.database.file_model import Document, Folder, Department, DocumentType, ProcessingState
+from app.database.user_model import Organization
 from app.module.file_manage.schema import DocumentCreate, DocumentUpdate, FolderCreate, SearchResultItem
 from app.utils.qdrant_store import search as qdrant_search
 
 
 async def get_documents(db: AsyncSession, organization_id: str, folder_id: str | None = None):
-    stmt = select(Document).where(Document.organization_id == organization_id)
+    stmt = select(Document).options(
+        joinedload(Document.department),
+        joinedload(Document.document_type),
+        joinedload(Document.organization),
+    ).where(Document.organization_id == organization_id)
     if folder_id:
         stmt = stmt.where(Document.folder_id == folder_id)
     stmt = stmt.order_by(Document.created_at.desc())
     result = await db.execute(stmt)
-    return result.scalars().all()
+    return result.unique().scalars().all()
 
 
 async def get_document(db: AsyncSession, doc_id: str):

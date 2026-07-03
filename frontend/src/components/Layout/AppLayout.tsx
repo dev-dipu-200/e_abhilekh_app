@@ -5,18 +5,20 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 import { useAuth } from '@/context/AuthContext'
+import { useLanguage } from '@/context/LanguageContext'
+import type { TranslationKey } from '@/lib/translations'
 import { Spinner } from '@/components/ui'
 
-const pageTitles: Record<string, string> = {
-  '/dashboard': 'Dashboard',
-  '/organizations': 'Organizations',
-  '/users': 'Users',
-  '/roles': 'Roles',
-  '/departments': 'Departments',
-  '/document-types': 'Document Types',
-  '/files': 'File Management',
-  '/ai-search': 'AI Search',
-  '/ai-draft': 'AI Draft Generator',
+const pageTitleKeys: Record<string, string> = {
+  '/dashboard': 'title.dashboard',
+  '/organizations': 'title.organizations',
+  '/users': 'title.users',
+  '/roles': 'title.roles',
+  '/departments': 'title.departments',
+  '/document-types': 'title.documentTypes',
+  '/files': 'title.fileManagement',
+  '/ai-search': 'title.aiSearch',
+  '/ai-draft': 'title.aiDraft',
 }
 
 interface AppLayoutProps {
@@ -28,6 +30,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, loading } = useAuth()
+  const { t } = useLanguage()
 
   useEffect(() => {
     if (!loading && !user) {
@@ -45,9 +48,10 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   if (!user) return null
 
-  const title = Object.entries(pageTitles).find(([path]) =>
+  const titleKey = (Object.entries(pageTitleKeys).find(([path]) =>
     pathname === path || pathname.startsWith(path + '/')
-  )?.[1] || 'E-Abhilekh'
+  )?.[1] || 'title.eAbhilekh') as TranslationKey
+  const title = t(titleKey)
 
   return (
     <div className="min-h-screen bg-gray-50">

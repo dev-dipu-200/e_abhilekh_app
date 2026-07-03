@@ -107,7 +107,7 @@ def process_document_file(self, document_id: str):
             "id": document_id,
             "page_count": result.get("page_count"),
             "subject": result.get("subject"),
-            "processing_state": "done",
+            "processing_state": "DONE",
         }
 
     except Exception as exc:

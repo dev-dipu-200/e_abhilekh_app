@@ -3,7 +3,7 @@ import secrets
 import string
 
 
-def generate_unique_id(prefix: str = "", length: int = 32) -> str | uuid.UUID:
+def generate_unique_id(prefix: str = "", length: int = 10) -> str | uuid.UUID:
     if not prefix:
         return uuid.uuid4()
 

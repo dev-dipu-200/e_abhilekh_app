@@ -60,8 +60,11 @@ export interface Document {
   designation?: string
   subject?: string
   organization_id: string
+  organization_name?: string
   department_id?: string
+  department_name?: string
   document_type_id?: string
+  document_type_name?: string
   folder_id?: string
   status: string
   priority: string
@@ -71,6 +74,7 @@ export interface Document {
   is_archived: boolean
   processing_state: string
   parser_type?: string
+  preview_urls: string[]
   created_at: string
   updated_at: string
 }

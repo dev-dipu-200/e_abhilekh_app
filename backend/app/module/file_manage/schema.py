@@ -38,14 +38,30 @@ class DocumentUpdate(BaseModel):
     is_archived: bool | None = None
 
 
-class DocumentResponse(DocumentBase):
+class DocumentResponse(BaseModel):
     id: str
     file: str
+    file_number: str | None = None
+    designation: str | None = None
+    subject: str | None = None
+    organization_id: str
+    organization_name: str | None = None
+    department_id: str | None = None
+    department_name: str | None = None
+    document_type_id: str | None = None
+    document_type_name: str | None = None
+    folder_id: str | None = None
+    status: str = "new"
+    priority: str = "medium"
+    amount: str | None = None
+    document_date: date | None = None
+    current_holder_id: str | None = None
     uploader_id: str
-    is_starred: bool
-    is_archived: bool
-    processing_state: str
+    is_starred: bool = False
+    is_archived: bool = False
+    processing_state: str = "PENDING"
     parser_type: str | None = None
+    preview_urls: list[str] = []
     created_at: datetime
     updated_at: datetime
 

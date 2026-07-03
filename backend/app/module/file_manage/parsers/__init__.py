@@ -1,20 +1,29 @@
 PARSER_REGISTRY = {}
 
 
+def _check_import(module: str, name: str) -> bool:
+    try:
+        __import__(module)
+        return True
+    except ImportError:
+        return False
+
 def _register_parsers():
     from .pymupdf import PyMuPDFParser
     PARSER_REGISTRY["pymupdf"] = PyMuPDFParser
     from .tesseract_ocr import TesseractOCRParser
     PARSER_REGISTRY["tesseract"] = TesseractOCRParser
-    try:
+
+    if _check_import("docling", "DoclingParser"):
         from .docling import DoclingParser
         PARSER_REGISTRY["docling"] = DoclingParser
-    except Exception:
+    else:
         PARSER_REGISTRY["docling"] = None
-    try:
+
+    if _check_import("google.cloud.documentai", "DocumentAIParser"):
         from .documentai import DocumentAIParser
         PARSER_REGISTRY["documentai"] = DocumentAIParser
-    except Exception:
+    else:
         PARSER_REGISTRY["documentai"] = None
 
 

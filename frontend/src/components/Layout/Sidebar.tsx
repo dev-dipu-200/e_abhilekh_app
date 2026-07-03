@@ -16,17 +16,19 @@ import {
   PenTool,
   X,
 } from 'lucide-react'
+import { useLanguage } from '@/context/LanguageContext'
+import type { TranslationKey } from '@/lib/translations'
 
-const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/organizations', label: 'Organizations', icon: Building2 },
-  { href: '/users', label: 'Users', icon: Users },
-  { href: '/roles', label: 'Roles', icon: Shield },
-  { href: '/departments', label: 'Departments', icon: Building },
-  { href: '/document-types', label: 'Document Types', icon: FileText },
-  { href: '/files', label: 'File Management', icon: FolderOpen },
-  { href: '/ai-search', label: 'AI Search', icon: Search },
-  { href: '/ai-draft', label: 'AI Draft', icon: PenTool },
+const navItems: { href: string; key: TranslationKey; icon: React.ComponentType<{ className?: string }> }[] = [
+  { href: '/dashboard', key: 'nav.dashboard', icon: LayoutDashboard },
+  { href: '/organizations', key: 'nav.organizations', icon: Building2 },
+  { href: '/users', key: 'nav.users', icon: Users },
+  { href: '/roles', key: 'nav.roles', icon: Shield },
+  { href: '/departments', key: 'nav.departments', icon: Building },
+  { href: '/document-types', key: 'nav.documentTypes', icon: FileText },
+  { href: '/files', key: 'nav.fileManagement', icon: FolderOpen },
+  { href: '/ai-search', key: 'nav.aiSearch', icon: Search },
+  { href: '/ai-draft', key: 'nav.aiDraft', icon: PenTool },
 ]
 
 interface SidebarProps {
@@ -36,6 +38,7 @@ interface SidebarProps {
 
 export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname()
+  const { t } = useLanguage()
 
   const nav = (
     <div className="flex flex-col h-full">
@@ -63,14 +66,14 @@ export function Sidebar({ open, onClose }: SidebarProps) {
               )}
             >
               <Icon className={clsx('h-5 w-5', active ? 'text-primary-600' : 'text-gray-400')} />
-              {item.label}
+              {t(item.key)}
             </Link>
           )
         })}
       </nav>
 
       <div className="px-4 py-4 border-t border-gray-100">
-        <p className="text-xs text-gray-400">v1.0.0</p>
+        <p className="text-xs text-gray-400">{t('sidebar.version')}</p>
       </div>
     </div>
   )
