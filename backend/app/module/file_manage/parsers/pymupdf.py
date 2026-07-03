@@ -23,9 +23,9 @@ class PyMuPDFParser:
 
         subject = full_text.strip().split("\n")[0][:500] if full_text.strip() else None
 
-        # Detect corrupted Hindi: if text has Devanagari chars mixed with
-        # Latin Extended chars (U+0100-U+024F), the ToUnicode CMap is broken
-        if self._is_corrupted(full_text):
+        # Fall back to OCR when the PDF is image-only or when the embedded
+        # Unicode mapping is broken and extracted Hindi text is unreadable.
+        if self._should_fallback_to_ocr(full_text, pages_text):
             pages_text, full_text = self._ocr_extract(file_path)
             subject = full_text.strip().split("\n")[0][:500] if full_text.strip() else subject
 
@@ -35,6 +35,16 @@ class PyMuPDFParser:
             "raw_text": full_text,
             "pages": pages_text,
         }
+
+    def _should_fallback_to_ocr(self, text: str, pages: list[str]) -> bool:
+        non_empty_pages = sum(1 for page in pages if page.strip())
+        if non_empty_pages == 0:
+            return True
+
+        if len(text.strip()) < 50:
+            return True
+
+        return self._is_corrupted(text)
 
     def _is_corrupted(self, text: str) -> bool:
         devanagari = sum(1 for c in text if 0x0900 <= ord(c) <= 0x097F)
@@ -51,8 +61,11 @@ class PyMuPDFParser:
             pix = page.get_pixmap(dpi=200)
             img = Image.open(io.BytesIO(pix.tobytes("png")))
             text = pytesseract.image_to_string(img, lang="hin+eng")
-            text = re.sub(r"[—–•·]+", " ", text)
-            text = re.sub(r"\n{3,}", "\n\n", text)
-            pages.append(text.strip())
+            pages.append(self._clean_text(text))
         pdf.close()
         return pages, "\n\n".join(pages)
+
+    def _clean_text(self, text: str) -> str:
+        text = re.sub(r"[—–•·]+", " ", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()

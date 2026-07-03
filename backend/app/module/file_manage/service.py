@@ -4,7 +4,7 @@ from sqlalchemy import select, and_, extract
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 import uuid
-from app.database.file_model import Document, Folder, Department, DocumentType, ProcessingState
+from app.database.file_model import Document, Folder, Department, DocumentType, ProcessingState, ActivityLog
 from app.database.user_model import Organization
 from app.module.file_manage.schema import DocumentCreate, DocumentUpdate, FolderCreate, SearchResultItem
 from app.utils.qdrant_store import search as qdrant_search
@@ -35,6 +35,21 @@ async def get_document(db: AsyncSession, doc_id: str):
     return result.unique().scalar_one_or_none()
 
 
+async def log_document_activity(
+    db: AsyncSession,
+    document_id: str,
+    action: str,
+    user_id: str | None = None,
+    details: str | None = None,
+):
+    db.add(ActivityLog(
+        document_id=document_id,
+        action=action,
+        user_id=user_id,
+        details=details,
+    ))
+
+
 async def create_document(db: AsyncSession, data: DocumentCreate, uploader_id: str, file_path: str):
     if not data.folder_id:
         folder_name = f"File_NO-{uuid.uuid4().hex[:6]}"
@@ -52,23 +67,43 @@ async def create_document(db: AsyncSession, data: DocumentCreate, uploader_id: s
         **data.model_dump(),
     )
     db.add(doc)
+    await db.flush()
+    await log_document_activity(
+        db,
+        document_id=doc.id,
+        action="Document uploaded",
+        user_id=uploader_id,
+        details=f"{doc.subject or 'Untitled document'} uploaded using {doc.parser_type or 'pymupdf'} parser",
+    )
     await db.commit()
     await db.refresh(doc)
     return doc
 
 
-async def update_document(db: AsyncSession, doc_id: str, data: DocumentUpdate):
+async def update_document(db: AsyncSession, doc_id: str, data: DocumentUpdate, user_id: str | None = None):
     doc = await get_document(db, doc_id)
     if not doc:
         return None
+    changes = []
     for key, val in data.model_dump(exclude_unset=True).items():
+        old_val = getattr(doc, key)
         setattr(doc, key, val)
+        if old_val != val:
+            changes.append(f"{key}: {old_val} -> {val}")
+    if changes:
+        await log_document_activity(
+            db,
+            document_id=doc.id,
+            action="Document updated",
+            user_id=user_id,
+            details="; ".join(changes[:5]),
+        )
     await db.commit()
     await db.refresh(doc)
     return doc
 
 
-async def delete_document(db: AsyncSession, doc_id: str):
+async def delete_document(db: AsyncSession, doc_id: str, user_id: str | None = None):
     doc = await get_document(db, doc_id)
     if not doc:
         return False

@@ -309,7 +309,7 @@ function AIDraftContent() {
       if (!resp.ok) {
         redirectIfUnauthorized(resp)
         const err = await resp.json().catch(() => ({}))
-        toast(err.detail || 'Generation failed', 'error')
+        toast(err.detail || err.message || 'Generation failed', 'error')
         setGenerating(false)
         return
       }

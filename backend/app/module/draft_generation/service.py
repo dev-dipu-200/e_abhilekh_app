@@ -2,6 +2,7 @@ import io
 import json
 import uuid
 import httpx
+import re
 from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text as sa_text
@@ -169,6 +170,58 @@ LANGUAGE_TERMINOLOGY = {
     "en": ENGLISH_LANGUAGE_RULES,
 }
 
+INSTRUCTION_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "in", "into",
+    "is", "it", "of", "on", "or", "that", "the", "this", "to", "with", "without",
+    "write", "draft", "prepare", "generate", "make", "create", "include", "using",
+    "based", "need", "please", "formal", "official", "letter", "circular", "notice",
+    "information", "reply", "rti", "document", "documents", "key", "points",
+    "instruction", "instructions", "english", "hindi", "translate", "translated",
+    "summary", "summarize", "rewrite", "convert", "format", "simple", "detailed",
+    "main", "any", "about", "into", "your", "their", "them",
+    "एक", "और", "का", "की", "के", "को", "में", "पर", "से", "तक", "लिए", "द्वारा",
+    "यह", "वह", "जो", "कीजिए", "करें", "करे", "ड्राफ्ट", "तैयार", "बनाएं", "बनाइए",
+    "लिखें", "सूचना", "पत्र", "नोटिस", "उत्तर", "मुख्य", "बिंदु", "निर्देश", "हिंदी",
+    "अंग्रेजी", "अनुवाद", "सरल", "विस्तृत", "आधार", "प्रारूप",
+}
+
+UNRELATED_INSTRUCTION_MESSAGE = (
+    "Provided instructions do not appear to be related to the selected document. "
+    "Please revise the key points/instructions or choose the correct document."
+)
+
+
+def _normalize_text(text: str) -> str:
+    return re.sub(r"[^0-9A-Za-z\u0900-\u097F\s]+", " ", (text or "").lower())
+
+
+def _extract_significant_terms(text: str) -> list[str]:
+    terms: list[str] = []
+    for token in _normalize_text(text).split():
+        if len(token) <= 2 or token.isdigit() or token in INSTRUCTION_STOPWORDS:
+            continue
+        if token not in terms:
+            terms.append(token)
+    return terms
+
+
+def _count_term_matches(terms: list[str], corpus: str) -> int:
+    corpus_norm = _normalize_text(corpus)
+    return sum(1 for term in terms if term in corpus_norm)
+
+
+def _parse_relevance_decision(raw_response: str) -> bool | None:
+    normalized = (raw_response or "").strip().lower()
+    if '"related":"yes"' in normalized or '"related": "yes"' in normalized:
+        return True
+    if '"related":"no"' in normalized or '"related": "no"' in normalized:
+        return False
+    if normalized.startswith("yes"):
+        return True
+    if normalized.startswith("no"):
+        return False
+    return None
+
 
 async def get_document_with_relations(db: AsyncSession, doc_id: str):
     result = await db.execute(
@@ -229,6 +282,92 @@ async def get_relevant_records(
         )
         for r in results[:limit]
     ]
+
+
+async def validate_instruction_relevance(
+    db: AsyncSession,
+    reference_id: str,
+    instructions: str,
+    organization_id: str,
+) -> str | None:
+    stripped = instructions.strip()
+    if not stripped:
+        return None
+
+    terms = _extract_significant_terms(stripped)
+    if len(terms) < 2:
+        return None
+
+    ref_doc = await get_document_with_relations(db, reference_id)
+    if not ref_doc:
+        return "Reference document not found"
+
+    ref_full_text = await get_document_full_text(db, reference_id, max_chars=6000)
+    metadata_parts = [
+        ref_doc.subject or "",
+        ref_doc.file_number or "",
+        ref_doc.designation or "",
+        ref_doc.department.name if ref_doc.department else "",
+        ref_doc.document_type.name if ref_doc.document_type else "",
+        ref_doc.file.split("/")[-1] if ref_doc.file else "",
+        ref_full_text,
+    ]
+    match_count = _count_term_matches(terms, " ".join(metadata_parts))
+
+    dept_name = ref_doc.department.name if ref_doc.department else ""
+    doctype_name = ref_doc.document_type.name if ref_doc.document_type else ""
+    filename = ref_doc.file.split("/")[-1] if ref_doc.file else ""
+
+    relevance_prompt = (
+        "Decide whether the user's instructions are related to the selected government document.\n"
+        "Return JSON only in this exact format: {\"related\":\"yes\"} or {\"related\":\"no\"}.\n"
+        "Mark related=yes only when the instructions clearly match the same subject, topic, file matter, "
+        "or factual context present in the document metadata/text. If the instructions are about a different "
+        "topic, person, scheme, office matter, or event, return related=no.\n\n"
+        f"Document Subject: {ref_doc.subject or 'N/A'}\n"
+        f"Document Type: {doctype_name or 'N/A'}\n"
+        f"Department: {dept_name or 'N/A'}\n"
+        f"File Number: {ref_doc.file_number or 'N/A'}\n"
+        f"Designation: {ref_doc.designation or 'N/A'}\n"
+        f"Filename: {filename or 'N/A'}\n"
+        f"Document Text:\n{ref_full_text[:4000] or 'N/A'}\n\n"
+        f"User Instructions:\n{stripped}"
+    )
+
+    try:
+        llm_result = chat(
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a strict relevance classifier. "
+                        "You only answer with the requested JSON."
+                    ),
+                },
+                {"role": "user", "content": relevance_prompt},
+            ],
+            temperature=0.0,
+            num_predict=32,
+        )
+        llm_decision = _parse_relevance_decision(llm_result)
+        if llm_decision is True:
+            return None
+        if llm_decision is False:
+            return UNRELATED_INSTRUCTION_MESSAGE
+    except Exception:
+        pass
+
+    semantic_hits = qdrant_search(stripped, organization_id, limit=8)
+    has_semantic_match = any(
+        hit.get("document_id") == reference_id and hit.get("score", 0) >= 0.45
+        for hit in semantic_hits
+    )
+
+    minimum_keyword_matches = max(2, min(3, len(terms) // 2))
+    if has_semantic_match or match_count >= minimum_keyword_matches:
+        return None
+
+    return UNRELATED_INSTRUCTION_MESSAGE
 
 
 async def build_draft_context(

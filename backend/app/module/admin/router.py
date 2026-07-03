@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.base import get_db
 from app.module.admin.schema import AdminRegisterRequest
 from app.module.admin import service as admin_service
-from app.dependencies import get_current_superuser
+from app.dependencies import get_current_superuser, get_current_user
 from app.database.user_model import User
 from app.utils.response import SuccessResponse
 
@@ -11,8 +11,11 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 
 
 @router.get("/dashboard")
-async def dashboard(db: AsyncSession = Depends(get_db)):
-    stats = await admin_service.get_dashboard_stats(db)
+async def dashboard(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    stats = await admin_service.get_dashboard_stats(db, current_user)
     return SuccessResponse(result=stats, message="Dashboard stats retrieved", status_code=200)
 
 

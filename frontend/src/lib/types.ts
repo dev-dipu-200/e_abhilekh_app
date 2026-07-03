@@ -84,6 +84,19 @@ export interface DashboardStats {
   total_users: number
   total_documents: number
   total_departments: number
+  recent_activity: DashboardActivity[]
+}
+
+export interface DashboardActivity {
+  id: string
+  action: string
+  details?: string
+  document_id: string
+  document_subject?: string
+  file_number?: string
+  user_id?: string
+  user_name?: string
+  created_at?: string
 }
 
 export interface SearchResultItem {

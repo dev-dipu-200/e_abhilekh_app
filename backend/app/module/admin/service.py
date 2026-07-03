@@ -6,16 +6,43 @@ from app.database.user_model import Organization, User, Role
 from app.database.file_model import Document, Department, DocumentType, Folder, Note, Attachment, ActivityLog, GeneratedDraft
 
 
-async def get_dashboard_stats(db: AsyncSession):
+async def get_dashboard_stats(db: AsyncSession, current_user: User | None = None):
     orgs = await db.execute(select(func.count(Organization.id)))
     users = await db.execute(select(func.count(User.id)))
     docs = await db.execute(select(func.count(Document.id)))
     depts = await db.execute(select(func.count(Department.id)))
+
+    activity_stmt = (
+        select(ActivityLog, Document, User)
+        .join(Document, ActivityLog.document_id == Document.id)
+        .outerjoin(User, ActivityLog.user_id == User.id)
+        .order_by(ActivityLog.created_at.desc())
+        .limit(10)
+    )
+    if current_user and current_user.organization_id:
+        activity_stmt = activity_stmt.where(Document.organization_id == current_user.organization_id)
+
+    activity_rows = await db.execute(activity_stmt)
+    recent_activity = []
+    for log, document, user in activity_rows.all():
+        recent_activity.append({
+            "id": log.id,
+            "action": log.action,
+            "details": log.details,
+            "document_id": document.id,
+            "document_subject": document.subject,
+            "file_number": document.file_number,
+            "user_id": log.user_id,
+            "user_name": user.full_name if user and user.full_name else (user.username if user else None),
+            "created_at": log.created_at.isoformat() if log.created_at else None,
+        })
+
     return {
         "total_organizations": orgs.scalar(),
         "total_users": users.scalar(),
         "total_documents": docs.scalar(),
         "total_departments": depts.scalar(),
+        "recent_activity": recent_activity,
     }
 
 
@@ -73,6 +100,5 @@ async def clear_all_records(db: AsyncSession):
     for table in tables:
         await db.execute(text(f"DELETE FROM {table}"))
     await db.commit()
-
 
 

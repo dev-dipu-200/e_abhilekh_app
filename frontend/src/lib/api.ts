@@ -39,8 +39,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: res.statusText }))
-    toast(err.message || 'Request failed', 'error')
-    throw new Error(err.message || 'Request failed')
+    const message = err.detail || err.message || 'Request failed'
+    toast(message, 'error')
+    throw new Error(message)
   }
   const data = await res.json()
   if (data && typeof data === 'object' && 'result' in data && 'status_code' in data) {

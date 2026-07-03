@@ -17,6 +17,13 @@ export default function DashboardPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  const formatTime = (value?: string) => {
+    if (!value) return ''
+    const dt = new Date(value)
+    if (Number.isNaN(dt.getTime())) return ''
+    return dt.toLocaleString()
+  }
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -38,7 +45,32 @@ export default function DashboardPage() {
               <h3 className="font-semibold text-gray-900">Recent Activity</h3>
               <ArrowUpRight className="h-4 w-4 text-gray-400" />
             </div>
-            <p className="text-sm text-gray-500 text-center py-8">No recent activity</p>
+            {loading ? (
+              <p className="text-sm text-gray-500 text-center py-8">Loading activity...</p>
+            ) : stats?.recent_activity?.length ? (
+              <div className="space-y-3">
+                {stats.recent_activity.map((item) => (
+                  <div key={item.id} className="rounded-xl border border-gray-200 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{item.action}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {item.document_subject || item.file_number || item.document_id}
+                        </p>
+                        {item.details && <p className="text-xs text-gray-500 mt-1">{item.details}</p>}
+                        {(item.user_name || item.created_at) && (
+                          <p className="text-xs text-gray-400 mt-2">
+                            {[item.user_name, formatTime(item.created_at)].filter(Boolean).join(' • ')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 text-center py-8">No recent activity</p>
+            )}
           </Card>
           <Card>
             <div className="flex items-center justify-between mb-4">

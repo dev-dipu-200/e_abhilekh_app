@@ -23,9 +23,10 @@ const pageTitleKeys: Record<string, string> = {
 
 interface AppLayoutProps {
   children: ReactNode
+  fullWidth?: boolean
 }
 
-export function AppLayout({ children }: AppLayoutProps) {
+export function AppLayout({ children, fullWidth = true }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
@@ -58,7 +59,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="lg:pl-[260px]">
         <Header title={title} onMenuClick={() => setSidebarOpen(true)} />
-        <main className="page-container">{children}</main>
+        <main className={fullWidth ? 'p-6' : 'page-container'}>{children}</main>
       </div>
     </div>
   )

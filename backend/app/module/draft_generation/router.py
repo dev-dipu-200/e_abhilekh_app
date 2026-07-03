@@ -41,6 +41,15 @@ async def generate_draft_stream(
     if data.template_id == "information" and not data.instructions.strip():
         raise HTTPException(status_code=422, detail="Key Points/Instructions are required for Information template")
 
+    relevance_error = await draft_service.validate_instruction_relevance(
+        db=db,
+        reference_id=data.reference_id,
+        instructions=data.instructions,
+        organization_id=org_id,
+    )
+    if relevance_error:
+        raise HTTPException(status_code=422, detail=relevance_error)
+
     context = await draft_service.build_draft_context(
         db=db,
         template_id=data.template_id,
@@ -84,6 +93,15 @@ async def generate_draft(
 
     if data.template_id == "information" and not data.instructions.strip():
         raise HTTPException(status_code=422, detail="Key Points/Instructions are required for Information template")
+
+    relevance_error = await draft_service.validate_instruction_relevance(
+        db=db,
+        reference_id=data.reference_id,
+        instructions=data.instructions,
+        organization_id=org_id,
+    )
+    if relevance_error:
+        raise HTTPException(status_code=422, detail=relevance_error)
 
     context = await draft_service.build_draft_context(
         db=db,

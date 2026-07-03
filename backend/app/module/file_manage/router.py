@@ -100,16 +100,25 @@ async def upload_document(
 
 
 @router.put("/documents/{doc_id}")
-async def update_document(doc_id: str, data: DocumentUpdate, db: AsyncSession = Depends(get_db)):
-    doc = await file_service.update_document(db, doc_id, data)
+async def update_document(
+    doc_id: str,
+    data: DocumentUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    doc = await file_service.update_document(db, doc_id, data, current_user.id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     return SuccessResponse(result=DocumentResponse.model_validate(doc), message="Document updated successfully", status_code=200)
 
 
 @router.delete("/documents/{doc_id}")
-async def delete_document(doc_id: str, db: AsyncSession = Depends(get_db)):
-    if not await file_service.delete_document(db, doc_id):
+async def delete_document(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not await file_service.delete_document(db, doc_id, current_user.id):
         raise HTTPException(status_code=404, detail="Document not found")
     return SuccessResponse(result=None, message="Document deleted successfully", status_code=200)
 
