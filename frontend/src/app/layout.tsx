@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { AppProviders } from '@/components/providers/AppProviders'
 import { AuthProvider } from '@/context/AuthContext'
 import { LanguageProvider } from '@/context/LanguageContext'
 import { ToastContainer } from 'react-toastify'
@@ -20,12 +21,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-        <AuthProvider>
-          <LanguageProvider>
-            {children}
-          </LanguageProvider>
-          <ToastContainer position="top-right" autoClose={1000} hideProgressBar />
-        </AuthProvider>
+        <AppProviders>
+          <AuthProvider>
+            <LanguageProvider>
+              {children}
+            </LanguageProvider>
+            <ToastContainer position="top-right" autoClose={1000} hideProgressBar />
+          </AuthProvider>
+        </AppProviders>
       </body>
     </html>
   )

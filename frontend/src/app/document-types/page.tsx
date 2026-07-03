@@ -3,7 +3,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import { AppLayout } from '@/components/Layout/AppLayout'
 import { Button, Table, Modal, Input, Select } from '@/components/ui'
+import { useAuth } from '@/context/AuthContext'
 import { api } from '@/lib/api'
+import { ensureDocumentTypes, getScopeKey } from '@/lib/store/catalog'
+import { useAppDispatch, useAppSelector } from '@/lib/store/hooks'
+import { store } from '@/lib/store'
 import type { DocumentType } from '@/lib/types'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { noLeadingSpace } from '@/lib/utils'
@@ -44,19 +48,22 @@ function DocumentTypeForm({ initial, onSubmit, onCancel, loading }: {
 }
 
 export default function DocumentTypesPage() {
-  const [items, setItems] = useState<DocumentType[]>([])
-  const [loading, setLoading] = useState(true)
+  const { user } = useAuth()
+  const dispatch = useAppDispatch()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<DocumentType | null>(null)
   const [saving, setSaving] = useState(false)
+  const orgId = user?.organization_id ?? ''
+  const scopeKey = getScopeKey(!!user?.is_superuser, orgId)
+  const itemsCache = useAppSelector((state) => state.entities.documentTypesByKey[scopeKey])
+  const items = itemsCache?.items || []
+  const loading = !itemsCache?.loaded || itemsCache.status === 'loading'
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try { setItems(await api.documentTypes.list()) }
-    finally { setLoading(false) }
-  }, [])
+  const load = useCallback(async (force = false) => {
+    await ensureDocumentTypes(dispatch, store.getState, orgId, !!user?.is_superuser, force)
+  }, [dispatch, orgId, user?.is_superuser])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load().catch(() => {}) }, [load])
 
   const handleSubmit = async (data: any) => {
     setSaving(true)
@@ -65,14 +72,14 @@ export default function DocumentTypesPage() {
       else await api.documentTypes.create(data)
       setModalOpen(false)
       setEditing(null)
-      await load()
+      await load(true)
     } finally { setSaving(false) }
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure?')) return
     await api.documentTypes.delete(id)
-    await load()
+    await load(true)
   }
 
   return (

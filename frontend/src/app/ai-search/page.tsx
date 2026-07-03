@@ -6,39 +6,40 @@ import { AppLayout } from '@/components/Layout/AppLayout'
 import { Button, Card, Spinner, Badge } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
 import { api } from '@/lib/api'
+import { ensureDepartments, ensureDocumentTypes, getScopeKey } from '@/lib/store/catalog'
+import { store } from '@/lib/store'
+import { useAppDispatch, useAppSelector } from '@/lib/store/hooks'
+import { patchAiSearch, resetAiSearch } from '@/lib/store/slices/formsSlice'
 import type { SearchResultItem } from '@/lib/types'
 import { Search, Languages, FileText, X, Filter, ChevronDown, Clock, BookOpen, ArrowRight, Sparkles } from 'lucide-react'
 import { fetchSuggestions } from '@/lib/transliterate'
 
 export default function AISearchPage() {
   const { user } = useAuth()
+  const dispatch = useAppDispatch()
   const router = useRouter()
   const orgId = user?.organization_id ?? ''
+  const isSuperuser = !!user?.is_superuser
+  const scopeKey = getScopeKey(isSuperuser, orgId)
 
-  const [query, setQuery] = useState('')
-  const [language, setLanguage] = useState<'en' | 'hi'>('en')
+  const { query, language, filterDept, filterDocType, filterYear, showFilters } = useAppSelector((state) => state.forms.aiSearch)
   const [results, setResults] = useState<SearchResultItem[]>([])
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
   const [elapsed, setElapsed] = useState(0)
-  const [showFilters, setShowFilters] = useState(false)
-
-  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([])
-  const [docTypes, setDocTypes] = useState<{ id: string; name: string }[]>([])
-  const [filterDept, setFilterDept] = useState('')
-  const [filterDocType, setFilterDocType] = useState('')
-  const [filterYear, setFilterYear] = useState('')
+  const departments = useAppSelector((state) => state.entities.departmentsByKey[scopeKey]?.items || [])
+  const docTypes = useAppSelector((state) => state.entities.documentTypesByKey[scopeKey]?.items || [])
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [suggestIndex, setSuggestIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!orgId) return
-    api.files.departmentsList(orgId).then(setDepartments).catch(() => {})
-    api.files.documentTypesList(orgId).then(setDocTypes).catch(() => {})
-  }, [orgId])
+    ensureDepartments(dispatch, store.getState, orgId, isSuperuser).catch(() => {})
+    ensureDocumentTypes(dispatch, store.getState, orgId, isSuperuser).catch(() => {})
+  }, [dispatch, isSuperuser, orgId])
 
   const doSearch = useCallback(async (pageNum: number = 1, append: boolean = false) => {
     if (!query.trim() || !orgId) return
@@ -69,7 +70,7 @@ export default function AISearchPage() {
   }, [query, orgId, language, filterDept, filterDocType, filterYear])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setQuery(e.target.value)
+    dispatch(patchAiSearch({ query: e.target.value }))
     if (e.target.value.endsWith(' ')) setSuggestions([])
   }
 
@@ -78,10 +79,10 @@ export default function AISearchPage() {
     const lastWord = words[words.length - 1]
     if (!lastWord || /[\u0900-\u097F]/.test(lastWord) || language !== 'hi') {
       setSuggestions([])
-      setQuery(q => q + ' ')
+      dispatch(patchAiSearch({ query: query + ' ' }))
       return
     }
-    setQuery(q => q + ' ')
+    dispatch(patchAiSearch({ query: query + ' ' }))
     const sugs = await fetchSuggestions(lastWord)
     if (sugs.length) {
       setSuggestions(sugs)
@@ -94,7 +95,7 @@ export default function AISearchPage() {
   const applySuggestion = (sug: string) => {
     const words = query.replace(/\s+$/, '').split(/\s+/)
     words[words.length - 1] = sug
-    setQuery(words.join(' ') + ' ')
+    dispatch(patchAiSearch({ query: words.join(' ') + ' ' }))
     setSuggestions([])
     setSuggestIndex(-1)
     inputRef.current?.focus()
@@ -137,9 +138,18 @@ export default function AISearchPage() {
   const loadMore = () => doSearch(page + 1, true)
 
   const clearFilters = () => {
-    setFilterDept('')
-    setFilterDocType('')
-    setFilterYear('')
+    dispatch(patchAiSearch({ filterDept: '', filterDocType: '', filterYear: '' }))
+  }
+
+  const handleReset = () => {
+    dispatch(resetAiSearch())
+    setResults([])
+    setSearched(false)
+    setPage(1)
+    setHasMore(false)
+    setElapsed(0)
+    setSuggestions([])
+    setSuggestIndex(-1)
   }
 
   const hasFilters = filterDept || filterDocType || filterYear
@@ -169,19 +179,22 @@ export default function AISearchPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-sm font-medium text-gray-700">Language:</span>
-                <button onClick={() => setLanguage('en')}
+                <button onClick={() => dispatch(patchAiSearch({ language: 'en' }))}
                   className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${language === 'en' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                   <Languages className="inline h-4 w-4 mr-1" />English
                 </button>
-                <button onClick={() => setLanguage('hi')}
+                <button onClick={() => dispatch(patchAiSearch({ language: 'hi' }))}
                   className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${language === 'hi' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                   <Languages className="inline h-4 w-4 mr-1" />हिन्दी
                 </button>
               </div>
-              <button onClick={() => setShowFilters(!showFilters)}
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="secondary" size="sm" onClick={handleReset}>Reset</Button>
+                <button onClick={() => dispatch(patchAiSearch({ showFilters: !showFilters }))}
                 className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg transition-colors ${showFilters ? 'bg-primary-50 text-primary-700' : 'text-gray-500 hover:text-gray-700'}`}>
                 <Filter className="h-4 w-4" /> Filters {hasFilters && <Badge variant="blue">!</Badge>}
               </button>
+              </div>
             </div>
 
             <div className="flex gap-3">
@@ -223,7 +236,7 @@ export default function AISearchPage() {
               <div className="flex flex-wrap items-end gap-3 pt-2 border-t border-gray-100">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Department</label>
-                  <select value={filterDept} onChange={(e) => setFilterDept(e.target.value)}
+                  <select value={filterDept} onChange={(e) => dispatch(patchAiSearch({ filterDept: e.target.value }))}
                     className="form-input text-sm py-1.5 pr-8">
                     <option value="">All Departments</option>
                     {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
@@ -231,7 +244,7 @@ export default function AISearchPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Document Type</label>
-                  <select value={filterDocType} onChange={(e) => setFilterDocType(e.target.value)}
+                  <select value={filterDocType} onChange={(e) => dispatch(patchAiSearch({ filterDocType: e.target.value }))}
                     className="form-input text-sm py-1.5 pr-8">
                     <option value="">All Types</option>
                     {docTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -239,7 +252,7 @@ export default function AISearchPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Year</label>
-                  <input type="number" value={filterYear} onChange={(e) => setFilterYear(e.target.value)}
+                  <input type="number" value={filterYear} onChange={(e) => dispatch(patchAiSearch({ filterYear: e.target.value }))}
                     placeholder="e.g. 2026" className="form-input text-sm py-1.5 w-24" />
                 </div>
                 {hasFilters && (

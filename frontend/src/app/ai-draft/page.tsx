@@ -6,6 +6,10 @@ import { AppLayout } from '@/components/Layout/AppLayout'
 import { Button, Card, Spinner } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
 import { api, redirectIfUnauthorized } from '@/lib/api'
+import { ensureDocuments } from '@/lib/store/catalog'
+import { store } from '@/lib/store'
+import { useAppDispatch, useAppSelector } from '@/lib/store/hooks'
+import { patchAiDraft, resetAiDraft } from '@/lib/store/slices/formsSlice'
 import { toast } from '@/lib/toast'
 import type { DraftTemplate, Document } from '@/lib/types'
 import { FileText, Send, Save, Download, Copy, Check, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, List, ListOrdered, ArrowRight, BookOpen, Languages, Eye, Edit3 } from 'lucide-react'
@@ -217,16 +221,26 @@ function DraftPreview({ text }: { text: string }) {
 
 function AIDraftContent() {
   const { user } = useAuth()
+  const dispatch = useAppDispatch()
   const orgId = user?.organization_id ?? ''
   const searchParams = useSearchParams()
 
   const [templates, setTemplates] = useState<DraftTemplate[]>([])
-  const [documents, setDocuments] = useState<Document[]>([])
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
-  const [selectedDoc, setSelectedDoc] = useState<string>(searchParams.get('document_id') || '')
-  const [instructions, setInstructions] = useState('')
-  const [language, setLanguage] = useState<'en' | 'hi'>('en')
-  const [tone, setTone] = useState('formal')
+  const documents = useAppSelector((state) => state.entities.documentsByOrg[orgId]?.items || [])
+  const {
+    selectedTemplate,
+    selectedDoc,
+    instructions,
+    language,
+    tone,
+    isInstructionsHindi,
+  } = useAppSelector((state) => state.forms.aiDraft)
+  const setSelectedTemplate = (value: string) => dispatch(patchAiDraft({ selectedTemplate: value }))
+  const setSelectedDoc = (value: string) => dispatch(patchAiDraft({ selectedDoc: value }))
+  const setInstructions = (value: string) => dispatch(patchAiDraft({ instructions: value }))
+  const setLanguage = (value: 'en' | 'hi') => dispatch(patchAiDraft({ language: value }))
+  const setTone = (value: string) => dispatch(patchAiDraft({ tone: value }))
+  const setIsInstructionsHindi = (value: boolean) => dispatch(patchAiDraft({ isInstructionsHindi: value }))
 
   const [generating, setGenerating] = useState(false)
   const [draftText, setDraftText] = useState('')
@@ -238,7 +252,6 @@ function AIDraftContent() {
   const [copied, setCopied] = useState(false)
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [suggestIndex, setSuggestIndex] = useState(-1)
-  const [isInstructionsHindi, setIsInstructionsHindi] = useState(false)
   const [isTranslitMode, setIsTranslitMode] = useState(false)
   const [editorSuggestions, setEditorSuggestions] = useState<string[]>([])
   const [editorSugIndex, setEditorSugIndex] = useState(-1)
@@ -253,8 +266,15 @@ function AIDraftContent() {
   useEffect(() => {
     if (!orgId) return
     api.drafts.templates().then(setTemplates).catch(() => {})
-    api.files.documents.list(orgId).then(setDocuments).catch(() => {})
-  }, [orgId])
+    ensureDocuments(dispatch, store.getState, orgId).catch(() => {})
+  }, [dispatch, orgId])
+
+  useEffect(() => {
+    const docId = searchParams.get('document_id')
+    if (docId) {
+      dispatch(patchAiDraft({ selectedDoc: docId }))
+    }
+  }, [dispatch, searchParams])
 
   useEffect(() => {
     if (draftEndRef.current) {
@@ -267,6 +287,18 @@ function AIDraftContent() {
     setDraftText('')
     setSavedId(null)
     setShowEditor(false)
+  }
+
+  const handleResetForm = () => {
+    dispatch(resetAiDraft())
+    setDraftText('')
+    setDraftSubject('')
+    setSavedId(null)
+    setShowEditor(false)
+    setPreviewMode(true)
+    setCopied(false)
+    setSuggestions([])
+    setSuggestIndex(-1)
   }
 
   const handleGenerate = async () => {
@@ -591,9 +623,12 @@ function AIDraftContent() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div>
+        <div className="flex items-start justify-between gap-3">
+          <div>
           <h2 className="page-title">AI Draft Generator</h2>
           <p className="text-gray-500 -mt-4 mb-6">Generate government-style documents using AI</p>
+          </div>
+          <Button type="button" variant="secondary" size="sm" onClick={handleResetForm}>Reset</Button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">

@@ -4,24 +4,31 @@ import { useEffect, useState, useCallback } from 'react'
 import { AppLayout } from '@/components/Layout/AppLayout'
 import { Button, Table, Modal } from '@/components/ui'
 import { DepartmentForm } from '@/components/departments/DepartmentForm'
+import { useAuth } from '@/context/AuthContext'
 import { api } from '@/lib/api'
+import { ensureDepartments, getScopeKey } from '@/lib/store/catalog'
+import { useAppDispatch, useAppSelector } from '@/lib/store/hooks'
+import { store } from '@/lib/store'
 import type { Department } from '@/lib/types'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 
 export default function DepartmentsPage() {
-  const [depts, setDepts] = useState<Department[]>([])
-  const [loading, setLoading] = useState(true)
+  const { user } = useAuth()
+  const dispatch = useAppDispatch()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Department | null>(null)
   const [saving, setSaving] = useState(false)
+  const orgId = user?.organization_id ?? ''
+  const scopeKey = getScopeKey(!!user?.is_superuser, orgId)
+  const deptsCache = useAppSelector((state) => state.entities.departmentsByKey[scopeKey])
+  const depts = deptsCache?.items || []
+  const loading = !deptsCache?.loaded || deptsCache.status === 'loading'
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try { setDepts(await api.departments.list()) }
-    finally { setLoading(false) }
-  }, [])
+  const load = useCallback(async (force = false) => {
+    await ensureDepartments(dispatch, store.getState, orgId, !!user?.is_superuser, force)
+  }, [dispatch, orgId, user?.is_superuser])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load().catch(() => {}) }, [load])
 
   const handleSubmit = async (data: any) => {
     setSaving(true)
@@ -30,14 +37,14 @@ export default function DepartmentsPage() {
       else await api.departments.create(data)
       setModalOpen(false)
       setEditing(null)
-      await load()
+      await load(true)
     } finally { setSaving(false) }
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure?')) return
     await api.departments.delete(id)
-    await load()
+    await load(true)
   }
 
   return (
