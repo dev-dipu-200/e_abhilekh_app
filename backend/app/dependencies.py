@@ -21,3 +21,13 @@ async def get_current_superuser(
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
+
+
+async def get_current_org_admin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    if current_user.is_superuser:
+        return current_user
+    if current_user.role and (current_user.role.is_admin or current_user.role.is_superadmin):
+        return current_user
+    raise HTTPException(status_code=403, detail="Organization admin access required")

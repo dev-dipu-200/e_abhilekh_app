@@ -12,6 +12,7 @@ interface AuthUser {
   username: string
   full_name: string | null
   is_superuser: boolean
+  is_admin: boolean
   organization_id: string
 }
 
@@ -65,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       username: data.username,
       full_name: data.full_name,
       is_superuser: data.is_superuser,
+      is_admin: data.is_admin,
       organization_id: data.organization_id,
     }
     localStorage.setItem('auth', JSON.stringify({ token: data.access_token, user: authUser }))

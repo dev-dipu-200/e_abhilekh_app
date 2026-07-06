@@ -12,6 +12,10 @@ class Organization(Base):
     name = Column(String(255), unique=True, nullable=False)
     address = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
+    ai_provider = Column(String(50), nullable=False, default="ollama")
+    openai_api_key = Column(Text, nullable=True)
+    openai_embedding_model = Column(String(255), nullable=True)
+    openai_llm_model = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     users = relationship("User", back_populates="organization")

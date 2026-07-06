@@ -7,6 +7,7 @@ from app.database.user_model import Organization
 from app.database.file_model import Document, DocumentChunk, ProcessingState
 from app.module.file_manage.parsers import parse_document
 from app.utils.embeddings import encode_documents
+from app.utils.ai_runtime import resolve_org_ai_config
 from app.utils.qdrant_store import upsert_chunks, delete_document_chunks
 
 celery_app = Celery(__name__, broker=settings.CELERY_BROKER_URL, backend=settings.CELERY_RESULT_BACKEND)
@@ -20,8 +21,13 @@ def _get_doc(session: Session, doc_id: str) -> Document | None:
     return session.query(Document).filter(Document.id == doc_id).first()
 
 
-def _clear_existing_chunks(session: Session, document_id: str) -> None:
-    delete_document_chunks(document_id)
+def _get_org_runtime(session: Session, organization_id: str):
+    org = session.query(Organization).filter(Organization.id == organization_id).first()
+    return resolve_org_ai_config(org, organization_id)
+
+
+def _clear_existing_chunks(session: Session, document_id: str, runtime) -> None:
+    delete_document_chunks(document_id, runtime)
     session.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
     session.flush()
 
@@ -105,6 +111,7 @@ def process_document_file(self, document_id: str):
         session.commit()
 
         result = parse_document(doc.file, doc.parser_type)
+        runtime = _get_org_runtime(session, doc.organization_id)
 
         doc.subject = result.get("subject")
         doc.processing_state = ProcessingState.DONE
@@ -114,7 +121,7 @@ def process_document_file(self, document_id: str):
         pages = result.get("pages") or []
         if raw_text.strip():
             try:
-                _clear_existing_chunks(session, document_id)
+                _clear_existing_chunks(session, document_id, runtime)
                 chunk_texts = []
                 qdrant_chunks = []
                 chunk_index = 0
@@ -147,10 +154,10 @@ def process_document_file(self, document_id: str):
                         chunk_index += 1
 
                 if chunk_texts:
-                    embeddings = encode_documents(chunk_texts)
+                    embeddings = encode_documents(chunk_texts, runtime)
                     for qc, emb in zip(qdrant_chunks, embeddings):
                         qc["vector"] = emb
-                    upsert_chunks(qdrant_chunks)
+                    upsert_chunks(qdrant_chunks, runtime)
                 session.commit()
             except Exception:
                 import traceback

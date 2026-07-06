@@ -110,10 +110,11 @@ class SystemOverview(BaseModel):
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        try:
-            await conn.execute(text("ALTER TABLE documents ADD COLUMN designation VARCHAR(255)"))
-        except Exception:
-            pass
+        await conn.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS designation VARCHAR(255)"))
+        await conn.execute(text("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS ai_provider VARCHAR(50) NOT NULL DEFAULT 'ollama'"))
+        await conn.execute(text("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS openai_api_key TEXT"))
+        await conn.execute(text("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS openai_embedding_model VARCHAR(255)"))
+        await conn.execute(text("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS openai_llm_model VARCHAR(255)"))
     yield
 
 

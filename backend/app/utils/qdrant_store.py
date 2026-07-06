@@ -3,11 +3,8 @@ from functools import lru_cache
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from app.settings.config import settings
+from app.utils.ai_runtime import AIRuntimeConfig
 from app.utils.embeddings import encode_query
-
-
-COLLECTION_NAME = "documents_v4"
-VECTOR_SIZE = settings.OLLAMA_EMBEDDING_DIMENSIONS
 
 
 @lru_cache(maxsize=None)
@@ -15,21 +12,21 @@ def _get_client() -> QdrantClient:
     return QdrantClient(url=settings.QDRANT_URL, timeout=120)
 
 
-def ensure_collection():
+def ensure_collection(runtime: AIRuntimeConfig):
     client = _get_client()
     collections = client.get_collections().collections
-    if not any(c.name == COLLECTION_NAME for c in collections):
+    if not any(c.name == runtime.collection_name for c in collections):
         client.create_collection(
-            collection_name=COLLECTION_NAME,
+            collection_name=runtime.collection_name,
             vectors_config=models.VectorParams(
-                size=VECTOR_SIZE,
+                size=runtime.embedding_dimensions,
                 distance=models.Distance.COSINE,
             ),
         )
 
 
-def upsert_chunks(chunks: list[dict]):
-    ensure_collection()
+def upsert_chunks(chunks: list[dict], runtime: AIRuntimeConfig):
+    ensure_collection(runtime)
     client = _get_client()
     points = []
     for chunk in chunks:
@@ -54,16 +51,16 @@ def upsert_chunks(chunks: list[dict]):
     batch_size = 10
     for i in range(0, len(points), batch_size):
         batch = points[i : i + batch_size]
-        client.upsert(collection_name=COLLECTION_NAME, points=batch)
+        client.upsert(collection_name=runtime.collection_name, points=batch)
 
 
-def delete_document_chunks(document_id: str):
+def delete_document_chunks(document_id: str, runtime: AIRuntimeConfig):
     client = _get_client()
     collections = client.get_collections().collections
-    if not any(c.name == COLLECTION_NAME for c in collections):
+    if not any(c.name == runtime.collection_name for c in collections):
         return
     client.delete(
-        collection_name=COLLECTION_NAME,
+        collection_name=runtime.collection_name,
         points_selector=models.Filter(
             must=[
                 models.FieldCondition(
@@ -78,6 +75,7 @@ def delete_document_chunks(document_id: str):
 def search(
     query: str,
     organization_id: str,
+    runtime: AIRuntimeConfig,
     limit: int = 10,
     score_threshold: float = 0.30,
     department_id: str | None = None,
@@ -89,9 +87,9 @@ def search(
     most semantically relevant results for qwen3-embedding:8b vectors.
     Results are re-ranked with a small keyword-boost to surface exact matches.
     """
-    ensure_collection()
+    ensure_collection(runtime)
     client = _get_client()
-    query_vector = encode_query(query)
+    query_vector = encode_query(query, runtime)
 
     # Build metadata filter
     must_conditions = [
@@ -116,7 +114,7 @@ def search(
         )
 
     hits = client.query_points(
-        collection_name=COLLECTION_NAME,
+        collection_name=runtime.collection_name,
         query=query_vector,
         query_filter=models.Filter(must=must_conditions),
         limit=limit * 3,  # over-fetch for re-ranking

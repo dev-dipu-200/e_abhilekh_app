@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 import bcrypt
 from jose import jwt
@@ -9,7 +10,7 @@ from app.database.user_model import User
 
 
 async def authenticate_user(db: AsyncSession, email: str, password: str) -> User:
-    result = await db.execute(select(User).where(User.email == email))
+    result = await db.execute(select(User).options(joinedload(User.role)).where(User.email == email))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -35,7 +36,7 @@ async def get_user_from_token(db: AsyncSession, token: str) -> User:
             raise HTTPException(status_code=401, detail="Invalid token")
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(select(User).options(joinedload(User.role)).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")

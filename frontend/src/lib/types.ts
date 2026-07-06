@@ -3,6 +3,12 @@ export interface Organization {
   name: string
   address?: string
   is_active: boolean
+  ai_provider: string
+  openai_api_key?: string
+  openai_embedding_model?: string
+  openai_llm_model?: string
+  clear_openai_api_key?: boolean
+  has_openai_api_key: boolean
   created_at: string
 }
 

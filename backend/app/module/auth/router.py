@@ -14,6 +14,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
     user = await auth_service.authenticate_user(db, data.email, data.password)
     token = auth_service.create_access_token({"sub": user.id, "email": user.email})
+    is_admin = bool(user.role and (user.role.is_admin or user.role.is_superadmin))
     return SuccessResponse(
         result={
             "access_token": token,
@@ -23,6 +24,7 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
             "username": user.username,
             "full_name": user.full_name,
             "is_superuser": user.is_superuser,
+            "is_admin": is_admin,
             "organization_id": user.organization_id,
         },
         message="Login successful",

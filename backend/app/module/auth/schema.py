@@ -15,6 +15,7 @@ class LoginResponse(BaseModel):
     username: str
     full_name: str | None = None
     is_superuser: bool
+    is_admin: bool = False
     organization_id: str
 
 

@@ -7,6 +7,7 @@ import uuid
 from app.database.file_model import Document, Folder, Department, DocumentType, ProcessingState, ActivityLog
 from app.database.user_model import Organization
 from app.module.file_manage.schema import DocumentCreate, DocumentUpdate, FolderCreate, SearchResultItem
+from app.utils.ai_runtime import resolve_org_ai_config
 from app.utils.qdrant_store import search as qdrant_search
 
 
@@ -165,11 +166,15 @@ async def search_documents(
     page: int = 1,
 ) -> list[SearchResultItem]:
     start = time.time()
+    org_result = await db.execute(select(Organization).where(Organization.id == organization_id))
+    organization = org_result.scalar_one_or_none()
+    runtime = resolve_org_ai_config(organization, organization_id)
 
     # Pass metadata filters directly to Qdrant for pre-filtering accuracy
     results = qdrant_search(
         query,
         organization_id,
+        runtime,
         limit * 3,
         department_id=department_id,
         document_type_id=document_type_id,

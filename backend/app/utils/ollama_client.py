@@ -1,10 +1,33 @@
+import json
 import httpx
 from app.settings.config import settings
+from app.utils.ai_runtime import AIRuntimeConfig
 
 
-def generate(prompt: str, system: str | None = None, temperature: float = 0.7, num_predict: int = 1024) -> str:
+def generate(
+    prompt: str,
+    system: str | None = None,
+    temperature: float = 0.7,
+    num_predict: int = 1024,
+    runtime: AIRuntimeConfig | None = None,
+) -> str:
+    runtime = runtime or AIRuntimeConfig(
+        organization_id="global",
+        provider="ollama",
+        embedding_model=settings.OLLAMA_EMBEDDING_MODEL,
+        generation_model=settings.OLLAMA_GENERATION_MODEL,
+        embedding_dimensions=settings.OLLAMA_EMBEDDING_DIMENSIONS,
+        collection_name="documents_global",
+        ollama_base_url=settings.OLLAMA_BASE_URL,
+    )
+    if runtime.provider == "openai":
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        return chat(messages, temperature=temperature, num_predict=num_predict, runtime=runtime)
     payload = {
-        "model": settings.OLLAMA_GENERATION_MODEL,
+        "model": runtime.generation_model,
         "prompt": prompt,
         "stream": False,
         "options": {
@@ -17,7 +40,7 @@ def generate(prompt: str, system: str | None = None, temperature: float = 0.7, n
         payload["system"] = system
 
     resp = httpx.post(
-        f"{settings.OLLAMA_BASE_URL}/api/generate",
+        f"{runtime.ollama_base_url or settings.OLLAMA_BASE_URL}/api/generate",
         json=payload,
         verify=False,
         timeout=300,
@@ -26,10 +49,41 @@ def generate(prompt: str, system: str | None = None, temperature: float = 0.7, n
     return resp.json()["response"]
 
 
-def chat(messages: list[dict], temperature: float = 0.7, num_predict: int = 1024) -> str:
-    """Use /api/chat endpoint for better instruction-following via message role structure."""
+def chat(
+    messages: list[dict],
+    temperature: float = 0.7,
+    num_predict: int = 1024,
+    runtime: AIRuntimeConfig | None = None,
+) -> str:
+    runtime = runtime or AIRuntimeConfig(
+        organization_id="global",
+        provider="ollama",
+        embedding_model=settings.OLLAMA_EMBEDDING_MODEL,
+        generation_model=settings.OLLAMA_GENERATION_MODEL,
+        embedding_dimensions=settings.OLLAMA_EMBEDDING_DIMENSIONS,
+        collection_name="documents_global",
+        ollama_base_url=settings.OLLAMA_BASE_URL,
+    )
+    if runtime.provider == "openai":
+        resp = httpx.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {runtime.openai_api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": runtime.generation_model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": num_predict,
+            },
+            timeout=300,
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
+
     payload = {
-        "model": settings.OLLAMA_GENERATION_MODEL,
+        "model": runtime.generation_model,
         "messages": messages,
         "stream": False,
         "options": {
@@ -39,10 +93,61 @@ def chat(messages: list[dict], temperature: float = 0.7, num_predict: int = 1024
         },
     }
     resp = httpx.post(
-        f"{settings.OLLAMA_BASE_URL}/api/chat",
+        f"{runtime.ollama_base_url or settings.OLLAMA_BASE_URL}/api/chat",
         json=payload,
         verify=False,
         timeout=300,
     )
     resp.raise_for_status()
     return resp.json()["message"]["content"]
+
+
+def stream_chat(
+    messages: list[dict],
+    temperature: float = 0.7,
+    num_predict: int = 1024,
+    runtime: AIRuntimeConfig | None = None,
+):
+    runtime = runtime or AIRuntimeConfig(
+        organization_id="global",
+        provider="ollama",
+        embedding_model=settings.OLLAMA_EMBEDDING_MODEL,
+        generation_model=settings.OLLAMA_GENERATION_MODEL,
+        embedding_dimensions=settings.OLLAMA_EMBEDDING_DIMENSIONS,
+        collection_name="documents_global",
+        ollama_base_url=settings.OLLAMA_BASE_URL,
+    )
+    if runtime.provider == "openai":
+        yield chat(messages, temperature=temperature, num_predict=num_predict, runtime=runtime)
+        return
+
+    payload = {
+        "model": runtime.generation_model,
+        "messages": messages,
+        "stream": True,
+        "options": {
+            "temperature": temperature,
+            "num_predict": num_predict,
+            "repeat_penalty": 1.1,
+        },
+    }
+    with httpx.stream(
+        "POST",
+        f"{runtime.ollama_base_url or settings.OLLAMA_BASE_URL}/api/chat",
+        json=payload,
+        verify=False,
+        timeout=300,
+    ) as resp:
+        resp.raise_for_status()
+        for line in resp.iter_lines():
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+            except Exception:
+                continue
+            content = data.get("message", {}).get("content", "")
+            if content:
+                yield content
+            if data.get("done"):
+                break

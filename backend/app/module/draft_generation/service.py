@@ -1,14 +1,14 @@
 import io
 import json
 import uuid
-import httpx
 import re
 from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text as sa_text
+from sqlalchemy import select
 from app.database.file_model import Document, DocumentChunk, GeneratedDraft, Attachment, ActivityLog
 from app.database.user_model import Organization, User
-from app.utils.ollama_client import generate, chat
+from app.utils.ai_runtime import AIRuntimeConfig, resolve_org_ai_config
+from app.utils.ollama_client import generate, chat, stream_chat
 from app.utils.qdrant_store import search as qdrant_search
 from app.settings.config import settings
 from app.module.file_manage.schema import SearchResultItem
@@ -137,11 +137,11 @@ CRITICAL RULES:
 }
 
 
-def _build_system_prompt(template_id: str, language: str) -> str:
+def _build_system_prompt(template_id: str, language: str, runtime: AIRuntimeConfig) -> str:
     base_prompt = SYSTEM_PROMPTS.get(template_id, "")
     language_name = "Hindi" if language == "hi" else "English"
     runtime_note = (
-        f"You are running on the quantized Ollama model `{settings.OLLAMA_GENERATION_MODEL}`. "
+        f"You are running on the {runtime.provider} model `{runtime.generation_model}`. "
         f"Generate the final response directly in {language_name}, follow the required structure exactly, "
         "and do not mention the model, quantization, or backend pipeline in the visible draft."
     )
@@ -240,6 +240,7 @@ async def get_document_with_relations(db: AsyncSession, doc_id: str):
             joinedload(Document.department),
             joinedload(Document.document_type),
             joinedload(Document.folder),
+            joinedload(Document.organization),
         ).where(Document.id == doc_id)
     )
     return result.unique().scalar_one_or_none()
@@ -259,7 +260,14 @@ async def get_document_full_text(db: AsyncSession, doc_id: str, max_chars: int =
     full_text = "\n\n".join(c.content for c in chunks)
     return full_text[:max_chars]
 
+async def get_org_runtime(db: AsyncSession, organization_id: str) -> AIRuntimeConfig:
+    org_result = await db.execute(select(Organization).where(Organization.id == organization_id))
+    organization = org_result.scalar_one_or_none()
+    return resolve_org_ai_config(organization, organization_id)
+
+
 async def get_relevant_records(
+    db: AsyncSession,
     query: str,
     organization_id: str,
     limit: int = 8,
@@ -270,11 +278,12 @@ async def get_relevant_records(
     Uses query expansion: runs primary + secondary queries and deduplicates,
     which broadens recall for more complete draft grounding.
     """
-    results = qdrant_search(query, organization_id, limit)
+    runtime = await get_org_runtime(db, organization_id)
+    results = qdrant_search(query, organization_id, runtime, limit)
 
     # Query expansion: also search using secondary_query (e.g., user instructions)
     if secondary_query and secondary_query.strip() and secondary_query != query:
-        secondary = qdrant_search(secondary_query.strip(), organization_id, limit // 2)
+        secondary = qdrant_search(secondary_query.strip(), organization_id, runtime, limit // 2)
         seen_chunk_ids = {r["chunk_id"] for r in results}
         for r in secondary:
             if r["chunk_id"] not in seen_chunk_ids:
@@ -312,6 +321,7 @@ async def validate_instruction_relevance(
     ref_doc = await get_document_with_relations(db, reference_id)
     if not ref_doc:
         return "Reference document not found"
+    runtime = resolve_org_ai_config(ref_doc.organization, organization_id)
 
     ref_full_text = await get_document_full_text(db, reference_id, max_chars=6000)
     metadata_parts = [
@@ -359,6 +369,7 @@ async def validate_instruction_relevance(
             ],
             temperature=0.0,
             num_predict=32,
+            runtime=runtime,
         )
         llm_decision = _parse_relevance_decision(llm_result)
         if llm_decision is True:
@@ -368,7 +379,7 @@ async def validate_instruction_relevance(
     except Exception:
         pass
 
-    semantic_hits = qdrant_search(stripped, organization_id, limit=8)
+    semantic_hits = qdrant_search(stripped, organization_id, runtime, limit=8)
     has_semantic_match = any(
         hit.get("document_id") == reference_id and hit.get("score", 0) >= 0.45
         for hit in semantic_hits
@@ -393,13 +404,11 @@ async def build_draft_context(
     ref_doc = await get_document_with_relations(db, reference_id)
     ref_context = ""
     subject = ""
+    runtime = await get_org_runtime(db, organization_id)
 
     org_name = ""
-    if organization_id:
-        r = await db.execute(sa_text(f"SELECT name FROM organizations WHERE id = '{organization_id}'"))
-        row = r.fetchone()
-        if row:
-            org_name = row[0]
+    if ref_doc and ref_doc.organization:
+        org_name = ref_doc.organization.name
 
     if ref_doc:
         subject = ref_doc.subject or ""
@@ -425,6 +434,7 @@ async def build_draft_context(
 
     # Use query expansion: combine subject + user instructions for broader relevant record retrieval
     relevant_records = await get_relevant_records(
+        db,
         subject or reference_id,
         organization_id,
         secondary_query=instructions,
@@ -443,7 +453,7 @@ async def build_draft_context(
         f"Selected format: {template_name}",
         f"Target language: {visible_language}",
         f"Tone: {tone}",
-        f"Active generation model: {settings.OLLAMA_GENERATION_MODEL} (Quantized via Ollama)",
+        f"Active generation model: {runtime.generation_model} ({runtime.provider})",
         "",
         "=== REFERENCE DOCUMENT METADATA ===",
         ref_context,
@@ -560,47 +570,25 @@ async def build_draft_context(
 
     return {
         "prompt": "\n".join(prompt_parts),
-        "system_prompt": _build_system_prompt(template_id, language),
+        "system_prompt": _build_system_prompt(template_id, language, runtime),
         "reference_document": ref_doc,
         "relevant_records": relevant_records,
         "subject": subject,
-        "generation_model": settings.OLLAMA_GENERATION_MODEL,
+        "generation_model": runtime.generation_model,
+        "runtime": runtime,
     }
 
 
 def generate_draft_stream(context: dict):
-    payload = {
-        "model": settings.OLLAMA_GENERATION_MODEL,
-        "messages": [
+    yield from stream_chat(
+        messages=[
             {"role": "system", "content": context["system_prompt"]},
             {"role": "user", "content": context["prompt"]},
         ],
-        "stream": True,
-        "options": {
-            "temperature": 0.5,
-            "num_predict": 2048,
-            "repeat_penalty": 1.1,
-        },
-    }
-    with httpx.stream(
-        "POST",
-        f"{settings.OLLAMA_BASE_URL}/api/chat",
-        json=payload,
-        verify=False,
-        timeout=300,
-    ) as resp:
-        for line in resp.iter_lines():
-            if line:
-                try:
-                    data = json.loads(line)
-                    # /api/chat streaming returns message.content
-                    content = data.get("message", {}).get("content", "")
-                    if content:
-                        yield content
-                    if data.get("done"):
-                        break
-                except json.JSONDecodeError:
-                    continue
+        temperature=0.5,
+        num_predict=2048,
+        runtime=context["runtime"],
+    )
 
 
 def generate_draft_non_stream(context: dict) -> str:
@@ -611,6 +599,7 @@ def generate_draft_non_stream(context: dict) -> str:
         ],
         temperature=0.5,
         num_predict=2048,
+        runtime=context["runtime"],
     )
 
 
