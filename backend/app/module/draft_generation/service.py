@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database.file_model import Document, DocumentChunk, GeneratedDraft, Attachment, ActivityLog
 from app.database.user_model import Organization, User
-from app.utils.ai_runtime import AIRuntimeConfig, resolve_org_ai_config
+from app.utils.ai_runtime import AIRuntimeConfig, resolve_ai_config, resolve_org_ai_config
 from app.utils.ollama_client import generate, chat, stream_chat
 from app.utils.qdrant_store import search as qdrant_search
 from app.settings.config import settings
@@ -260,16 +260,17 @@ async def get_document_full_text(db: AsyncSession, doc_id: str, max_chars: int =
     full_text = "\n\n".join(c.content for c in chunks)
     return full_text[:max_chars]
 
-async def get_org_runtime(db: AsyncSession, organization_id: str) -> AIRuntimeConfig:
+async def get_org_runtime(db: AsyncSession, organization_id: str, current_user: User | None = None) -> AIRuntimeConfig:
     org_result = await db.execute(select(Organization).where(Organization.id == organization_id))
     organization = org_result.scalar_one_or_none()
-    return resolve_org_ai_config(organization, organization_id)
+    return resolve_ai_config(organization, organization_id, current_user)
 
 
 async def get_relevant_records(
     db: AsyncSession,
     query: str,
     organization_id: str,
+    current_user: User | None = None,
     limit: int = 8,
     secondary_query: str = "",
 ) -> list[SearchResultItem]:
@@ -278,7 +279,7 @@ async def get_relevant_records(
     Uses query expansion: runs primary + secondary queries and deduplicates,
     which broadens recall for more complete draft grounding.
     """
-    runtime = await get_org_runtime(db, organization_id)
+    runtime = await get_org_runtime(db, organization_id, current_user)
     results = qdrant_search(query, organization_id, runtime, limit)
 
     # Query expansion: also search using secondary_query (e.g., user instructions)
@@ -309,6 +310,7 @@ async def validate_instruction_relevance(
     reference_id: str,
     instructions: str,
     organization_id: str,
+    current_user: User | None = None,
 ) -> str | None:
     stripped = instructions.strip()
     if not stripped:
@@ -321,7 +323,7 @@ async def validate_instruction_relevance(
     ref_doc = await get_document_with_relations(db, reference_id)
     if not ref_doc:
         return "Reference document not found"
-    runtime = resolve_org_ai_config(ref_doc.organization, organization_id)
+    runtime = resolve_ai_config(ref_doc.organization, organization_id, current_user)
 
     ref_full_text = await get_document_full_text(db, reference_id, max_chars=6000)
     metadata_parts = [
@@ -400,11 +402,12 @@ async def build_draft_context(
     language: str,
     tone: str,
     organization_id: str,
+    current_user: User | None = None,
 ) -> dict:
     ref_doc = await get_document_with_relations(db, reference_id)
     ref_context = ""
     subject = ""
-    runtime = await get_org_runtime(db, organization_id)
+    runtime = await get_org_runtime(db, organization_id, current_user)
 
     org_name = ""
     if ref_doc and ref_doc.organization:
@@ -437,6 +440,7 @@ async def build_draft_context(
         db,
         subject or reference_id,
         organization_id,
+        current_user=current_user,
         secondary_query=instructions,
     )
     records_text = ""

@@ -19,6 +19,7 @@ const pageTitleKeys: Record<string, string> = {
   '/files': 'title.fileManagement',
   '/ai-search': 'title.aiSearch',
   '/ai-draft': 'title.aiDraft',
+  '/settings': 'title.settings',
 }
 
 interface AppLayoutProps {

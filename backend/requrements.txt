@@ -14,3 +14,4 @@ httpx
 qdrant-client
 pytesseract
 Pillow
+alembic

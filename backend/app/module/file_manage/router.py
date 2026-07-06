@@ -155,6 +155,7 @@ async def search_documents(data: SearchQuery, db: AsyncSession = Depends(get_db)
         db,
         query=data.query,
         organization_id=data.organization_id,
+        current_user=current_user,
         limit=data.page_size,
         department_id=data.department_id,
         document_type_id=data.document_type_id,

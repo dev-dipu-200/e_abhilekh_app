@@ -36,6 +36,19 @@ export interface User {
   created_at: string
 }
 
+export interface AISettings {
+  ai_provider: string
+  openai_api_key?: string
+  openai_embedding_model?: string
+  openai_llm_model?: string
+  clear_openai_api_key?: boolean
+  has_openai_api_key: boolean
+  organization_ai_provider: string
+  organization_openai_embedding_model?: string
+  organization_openai_llm_model?: string
+  organization_has_openai_api_key: boolean
+}
+
 export interface Department {
   id: string
   name: string

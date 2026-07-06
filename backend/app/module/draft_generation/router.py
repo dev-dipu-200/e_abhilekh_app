@@ -46,6 +46,7 @@ async def generate_draft_stream(
         reference_id=data.reference_id,
         instructions=data.instructions,
         organization_id=org_id,
+        current_user=current_user,
     )
     if relevance_error:
         raise HTTPException(status_code=422, detail=relevance_error)
@@ -58,6 +59,7 @@ async def generate_draft_stream(
         language=data.language,
         tone=data.tone,
         organization_id=org_id,
+        current_user=current_user,
     )
 
     async def event_stream():
@@ -99,6 +101,7 @@ async def generate_draft(
         reference_id=data.reference_id,
         instructions=data.instructions,
         organization_id=org_id,
+        current_user=current_user,
     )
     if relevance_error:
         raise HTTPException(status_code=422, detail=relevance_error)
@@ -111,6 +114,7 @@ async def generate_draft(
         language=data.language,
         tone=data.tone,
         organization_id=org_id,
+        current_user=current_user,
     )
 
     raw_output = draft_service.generate_draft_non_stream(context)

@@ -5,10 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 import uuid
 from app.database.file_model import Document, Folder, Department, DocumentType, ProcessingState, ActivityLog
-from app.database.user_model import Organization
+from app.database.user_model import Organization, User
 from app.module.file_manage.schema import DocumentCreate, DocumentUpdate, FolderCreate, SearchResultItem
-from app.utils.ai_runtime import resolve_org_ai_config
-from app.utils.qdrant_store import search as qdrant_search
+from app.utils.ai_runtime import resolve_ai_config, resolve_org_ai_config
+from app.utils.qdrant_store import search as qdrant_search, delete_document_chunks
 
 
 async def get_documents(db: AsyncSession, organization_id: str, folder_id: str | None = None):
@@ -108,6 +108,14 @@ async def delete_document(db: AsyncSession, doc_id: str, user_id: str | None = N
     doc = await get_document(db, doc_id)
     if not doc:
         return False
+    org_result = await db.execute(select(Organization).where(Organization.id == doc.organization_id))
+    organization = org_result.scalar_one_or_none()
+    delete_document_chunks(doc.id, resolve_org_ai_config(organization, doc.organization_id))
+    user_result = await db.execute(select(User).where(User.organization_id == doc.organization_id))
+    for user in user_result.scalars().all():
+        runtime = resolve_ai_config(organization, doc.organization_id, user)
+        if runtime.scope_type == "user":
+            delete_document_chunks(doc.id, runtime)
     await db.delete(doc)
     await db.commit()
     return True
@@ -156,6 +164,7 @@ async def search_documents(
     db: AsyncSession,
     query: str,
     organization_id: str,
+    current_user: User | None = None,
     limit: int = 10,
     department_id: str | None = None,
     document_type_id: str | None = None,
@@ -168,7 +177,7 @@ async def search_documents(
     start = time.time()
     org_result = await db.execute(select(Organization).where(Organization.id == organization_id))
     organization = org_result.scalar_one_or_none()
-    runtime = resolve_org_ai_config(organization, organization_id)
+    runtime = resolve_ai_config(organization, organization_id, current_user)
 
     # Pass metadata filters directly to Qdrant for pre-filtering accuracy
     results = qdrant_search(

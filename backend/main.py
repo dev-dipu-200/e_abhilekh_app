@@ -7,7 +7,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 from pydantic import BaseModel
-from sqlalchemy import text
 from app.database.base import engine, Base
 from app.module.admin.router import router as admin_router
 from app.module.users.router import router as users_router
@@ -18,6 +17,7 @@ from app.module.document_type.router import router as document_type_router
 from app.module.file_manage.router import router as file_manage_router
 from app.module.draft_generation.router import router as draft_router
 from app.module.auth.router import router as auth_router
+from app.module.settings.router import router as settings_router
 from app.settings.config import settings
 from app.utils.response import ErrorResponse
 
@@ -110,11 +110,6 @@ class SystemOverview(BaseModel):
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        await conn.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS designation VARCHAR(255)"))
-        await conn.execute(text("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS ai_provider VARCHAR(50) NOT NULL DEFAULT 'ollama'"))
-        await conn.execute(text("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS openai_api_key TEXT"))
-        await conn.execute(text("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS openai_embedding_model VARCHAR(255)"))
-        await conn.execute(text("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS openai_llm_model VARCHAR(255)"))
     yield
 
 
@@ -149,6 +144,7 @@ app.include_router(document_type_router, prefix="/api/v1")
 app.include_router(file_manage_router, prefix="/api/v1")
 app.include_router(draft_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(settings_router, prefix="/api/v1")
 
 
 @app.exception_handler(HTTPException)

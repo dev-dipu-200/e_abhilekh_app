@@ -73,6 +73,15 @@ export const api = {
       request<void>(`/organizations/${id}`, { method: 'DELETE' }),
   },
 
+  settings: {
+    getAI: () => request<import('./types').AISettings>('/settings/ai'),
+    updateAI: (data: Partial<import('./types').AISettings>) =>
+      request<import('./types').AISettings>('/settings/ai', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+  },
+
   roles: {
     list: (orgId?: string) =>
       request<import('./types').Role[]>(`/roles/${orgId ? `?organization_id=${orgId}` : ''}`),

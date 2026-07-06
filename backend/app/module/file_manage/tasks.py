@@ -3,11 +3,11 @@ from celery import Celery
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from app.settings.config import settings
-from app.database.user_model import Organization
+from app.database.user_model import Organization, User
 from app.database.file_model import Document, DocumentChunk, ProcessingState
 from app.module.file_manage.parsers import parse_document
 from app.utils.embeddings import encode_documents
-from app.utils.ai_runtime import resolve_org_ai_config
+from app.utils.ai_runtime import AIRuntimeConfig, resolve_ai_config, resolve_org_ai_config
 from app.utils.qdrant_store import upsert_chunks, delete_document_chunks
 
 celery_app = Celery(__name__, broker=settings.CELERY_BROKER_URL, backend=settings.CELERY_RESULT_BACKEND)
@@ -21,13 +21,23 @@ def _get_doc(session: Session, doc_id: str) -> Document | None:
     return session.query(Document).filter(Document.id == doc_id).first()
 
 
-def _get_org_runtime(session: Session, organization_id: str):
+def _get_all_runtimes(session: Session, organization_id: str) -> list[AIRuntimeConfig]:
     org = session.query(Organization).filter(Organization.id == organization_id).first()
-    return resolve_org_ai_config(org, organization_id)
+    runtimes = [resolve_org_ai_config(org, organization_id)]
+    users = session.query(User).filter(User.organization_id == organization_id, User.is_active.is_(True)).all()
+    for user in users:
+        runtime = resolve_ai_config(org, organization_id, user)
+        if runtime.scope_type == "user":
+            runtimes.append(runtime)
+    unique: dict[tuple[str, str], AIRuntimeConfig] = {}
+    for runtime in runtimes:
+        unique[(runtime.scope_type, runtime.scope_id)] = runtime
+    return list(unique.values())
 
 
-def _clear_existing_chunks(session: Session, document_id: str, runtime) -> None:
-    delete_document_chunks(document_id, runtime)
+def _clear_existing_chunks(session: Session, document_id: str, runtimes: list[AIRuntimeConfig]) -> None:
+    for runtime in runtimes:
+        delete_document_chunks(document_id, runtime)
     session.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
     session.flush()
 
@@ -111,7 +121,7 @@ def process_document_file(self, document_id: str):
         session.commit()
 
         result = parse_document(doc.file, doc.parser_type)
-        runtime = _get_org_runtime(session, doc.organization_id)
+        runtimes = _get_all_runtimes(session, doc.organization_id)
 
         doc.subject = result.get("subject")
         doc.processing_state = ProcessingState.DONE
@@ -121,7 +131,7 @@ def process_document_file(self, document_id: str):
         pages = result.get("pages") or []
         if raw_text.strip():
             try:
-                _clear_existing_chunks(session, document_id, runtime)
+                _clear_existing_chunks(session, document_id, runtimes)
                 chunk_texts = []
                 qdrant_chunks = []
                 chunk_index = 0
@@ -154,10 +164,14 @@ def process_document_file(self, document_id: str):
                         chunk_index += 1
 
                 if chunk_texts:
-                    embeddings = encode_documents(chunk_texts, runtime)
-                    for qc, emb in zip(qdrant_chunks, embeddings):
-                        qc["vector"] = emb
-                    upsert_chunks(qdrant_chunks, runtime)
+                    for runtime in runtimes:
+                        embeddings = encode_documents(chunk_texts, runtime)
+                        runtime_chunks = []
+                        for qc, emb in zip(qdrant_chunks, embeddings):
+                            runtime_chunk = dict(qc)
+                            runtime_chunk["vector"] = emb
+                            runtime_chunks.append(runtime_chunk)
+                        upsert_chunks(runtime_chunks, runtime)
                 session.commit()
             except Exception:
                 import traceback

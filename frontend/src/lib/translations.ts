@@ -10,6 +10,7 @@ export const translations = {
     'nav.fileManagement': 'File Management',
     'nav.aiSearch': 'AI Search',
     'nav.aiDraft': 'AI Draft',
+    'nav.settings': 'Settings',
 
     // Page titles
     'title.dashboard': 'Dashboard',
@@ -22,6 +23,7 @@ export const translations = {
     'title.fileDetails': 'File Details',
     'title.aiSearch': 'AI Search',
     'title.aiDraft': 'AI Draft Generator',
+    'title.settings': 'Settings',
     'title.eAbhilekh': 'E-Abhilekh',
 
     // Common actions
@@ -133,6 +135,7 @@ export const translations = {
     'nav.fileManagement': 'फ़ाइल प्रबंधन',
     'nav.aiSearch': 'AI खोज',
     'nav.aiDraft': 'AI ड्राफ्ट',
+    'nav.settings': 'सेटिंग्स',
 
     'title.dashboard': 'डैशबोर्ड',
     'title.organizations': 'संगठन',
@@ -144,6 +147,7 @@ export const translations = {
     'title.fileDetails': 'फ़ाइल विवरण',
     'title.aiSearch': 'AI खोज',
     'title.aiDraft': 'AI ड्राफ्ट जनरेटर',
+    'title.settings': 'सेटिंग्स',
     'title.eAbhilekh': 'ई-अभिलेख',
 
     'common.save': 'सहेजें',

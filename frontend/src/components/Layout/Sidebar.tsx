@@ -14,9 +14,11 @@ import {
   FileUp,
   Search,
   PenTool,
+  Settings,
   X,
 } from 'lucide-react'
 import { useLanguage } from '@/context/LanguageContext'
+import { useAuth } from '@/context/AuthContext'
 import type { TranslationKey } from '@/lib/translations'
 
 const navItems: { href: string; key: TranslationKey; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -29,6 +31,7 @@ const navItems: { href: string; key: TranslationKey; icon: React.ComponentType<{
   { href: '/files', key: 'nav.fileManagement', icon: FolderOpen },
   { href: '/ai-search', key: 'nav.aiSearch', icon: Search },
   { href: '/ai-draft', key: 'nav.aiDraft', icon: PenTool },
+  { href: '/settings', key: 'nav.settings', icon: Settings },
 ]
 
 interface SidebarProps {
@@ -39,6 +42,8 @@ interface SidebarProps {
 export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname()
   const { t } = useLanguage()
+  const { user } = useAuth()
+  const visibleNavItems = navItems.filter((item) => item.href !== '/settings' || !!user?.is_superuser || !!user?.is_admin)
 
   const nav = (
     <div className="flex flex-col h-full">
@@ -50,7 +55,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const Icon = item.icon
           const active = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
