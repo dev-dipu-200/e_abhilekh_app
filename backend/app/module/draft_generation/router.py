@@ -46,6 +46,7 @@ async def generate_draft_stream(
         reference_id=data.reference_id,
         instructions=data.instructions,
         organization_id=org_id,
+        template_id=data.template_id,
         current_user=current_user,
     )
     if relevance_error:
@@ -101,6 +102,7 @@ async def generate_draft(
         reference_id=data.reference_id,
         instructions=data.instructions,
         organization_id=org_id,
+        template_id=data.template_id,
         current_user=current_user,
     )
     if relevance_error:

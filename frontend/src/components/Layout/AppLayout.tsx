@@ -56,7 +56,7 @@ export function AppLayout({ children, fullWidth = true }: AppLayoutProps) {
   const title = t(titleKey)
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="app-shell">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="lg:pl-[260px]">
         <Header title={title} onMenuClick={() => setSidebarOpen(true)} />

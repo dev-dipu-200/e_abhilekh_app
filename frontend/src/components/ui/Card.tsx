@@ -9,7 +9,7 @@ interface CardProps {
 
 export function Card({ children, className, padding = true }: CardProps) {
   return (
-    <div className={clsx('bg-white rounded-xl shadow-sm border border-gray-200', padding && 'p-6', className)}>
+    <div className={clsx('card', padding && 'p-6', className)}>
       {children}
     </div>
   )
@@ -23,11 +23,11 @@ interface StatCardProps {
 }
 
 const iconColors = {
-  blue: 'bg-blue-50 text-blue-600',
+  blue: 'bg-primary-50 text-primary-600',
   green: 'bg-green-50 text-green-600',
   yellow: 'bg-yellow-50 text-yellow-600',
   red: 'bg-red-50 text-red-600',
-  purple: 'bg-purple-50 text-purple-600',
+  purple: 'bg-primary-100 text-primary-700',
 }
 
 export function StatCard({ label, value, icon, color = 'blue' }: StatCardProps) {

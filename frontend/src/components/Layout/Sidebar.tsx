@@ -47,8 +47,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
   const nav = (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-3 px-6 h-16 border-b border-gray-100">
-        <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+      <div className="flex items-center gap-3 px-6 h-16 border-b border-white/70">
+        <div className="w-9 h-9 brand-gradient rounded-xl flex items-center justify-center">
           <FileUp className="h-5 w-5 text-white" />
         </div>
         <span className="font-bold text-lg text-gray-900">E-Abhilekh</span>
@@ -77,7 +77,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         })}
       </nav>
 
-      <div className="px-4 py-4 border-t border-gray-100">
+      <div className="px-4 py-4 border-t border-white/70">
         <p className="text-xs text-gray-400">{t('sidebar.version')}</p>
       </div>
     </div>
@@ -86,7 +86,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   return (
     <>
       {/* Desktop */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-[260px] lg:fixed lg:inset-y-0 bg-white border-r border-gray-200">
+      <aside className="hidden lg:flex lg:flex-col lg:w-[260px] lg:fixed lg:inset-y-0 themed-sidebar border-r border-white/60">
         {nav}
       </aside>
 
@@ -94,7 +94,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       {open && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-          <aside className="relative w-[260px] h-full bg-white shadow-2xl">
+          <aside className="relative w-[260px] h-full themed-sidebar shadow-2xl">
             <div className="absolute top-3 right-3">
               <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100">
                 <X className="h-5 w-5 text-gray-500" />

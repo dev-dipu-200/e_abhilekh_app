@@ -15,7 +15,10 @@ function loadState() {
   try {
     const raw = window.localStorage.getItem(PERSIST_KEY)
     if (!raw) return undefined
-    return JSON.parse(raw)
+    const parsed = JSON.parse(raw)
+    return {
+      forms: parsed?.forms,
+    }
   } catch {
     return undefined
   }
@@ -32,7 +35,6 @@ if (typeof window !== 'undefined') {
       window.localStorage.setItem(
         PERSIST_KEY,
         JSON.stringify({
-          entities: store.getState().entities,
           forms: store.getState().forms,
         })
       )

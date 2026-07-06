@@ -9,37 +9,12 @@ import {
   setDocumentTypesFailure,
   setDocumentTypesLoading,
   setDocumentTypesSuccess,
-  setDocumentsFailure,
-  setDocumentsLoading,
-  setDocumentsSuccess,
 } from './slices/entitiesSlice'
 
 export const ALL_SCOPE_KEY = '__all__'
 
-const INCOMPLETE_PROCESSING_STATES = new Set(['PENDING', 'IN_PROGRESS'])
-
 export function getScopeKey(isSuperuser: boolean, organizationId: string) {
   return isSuperuser ? ALL_SCOPE_KEY : organizationId
-}
-
-export async function ensureDocuments(
-  dispatch: AppDispatch,
-  getState: () => RootState,
-  organizationId: string,
-  force = false
-) {
-  if (!organizationId) return
-  const cache = getState().entities.documentsByOrg[organizationId]
-  const hasIncompleteDocs = !!cache?.items?.some((doc) => INCOMPLETE_PROCESSING_STATES.has(doc.processing_state))
-  if (!force && cache?.loaded && !hasIncompleteDocs) return
-  dispatch(setDocumentsLoading(organizationId))
-  try {
-    const items = await api.files.documents.list(organizationId)
-    dispatch(setDocumentsSuccess({ key: organizationId, items }))
-  } catch (error) {
-    dispatch(setDocumentsFailure({ key: organizationId, error: error instanceof Error ? error.message : 'Failed to load documents' }))
-    throw error
-  }
 }
 
 export async function ensureDepartments(

@@ -201,6 +201,105 @@ UNRELATED_INSTRUCTION_MESSAGE = (
     "Please revise the key points/instructions or choose the correct document."
 )
 
+GENERIC_DOCUMENT_GUIDANCE_PATTERNS = (
+    "selected file",
+    "selected document",
+    "reference file",
+    "reference document",
+    "this file",
+    "this document",
+    "given the details about selected file",
+    "given the details about the selected file",
+    "given the details about selected document",
+    "based on selected file",
+    "based on selected document",
+    "use file details",
+    "use document details",
+    "use selected file details",
+    "use selected document details",
+    "according to selected file",
+    "according to selected document",
+    "selected file details",
+    "selected document details",
+    "चयनित फाइल",
+    "चयनित दस्तावेज",
+    "संदर्भ फाइल",
+    "संदर्भ दस्तावेज",
+    "इस फाइल",
+    "इस दस्तावेज",
+)
+
+GENERIC_DOCUMENT_REFERENCES = (
+    "selected file",
+    "selected document",
+    "reference file",
+    "reference document",
+    "this file",
+    "this document",
+    "file details",
+    "document details",
+    "selected file details",
+    "selected document details",
+    "document content",
+    "file content",
+    "attached file",
+    "attached document",
+    "uploaded file",
+    "uploaded document",
+    "current file",
+    "current document",
+    "given file",
+    "given document",
+    "चयनित फाइल",
+    "चयनित दस्तावेज",
+    "संदर्भ फाइल",
+    "संदर्भ दस्तावेज",
+    "इस फाइल",
+    "इस दस्तावेज",
+    "फाइल का विवरण",
+    "दस्तावेज का विवरण",
+    "फाइल की जानकारी",
+    "दस्तावेज की जानकारी",
+    "संलग्न फाइल",
+    "संलग्न दस्तावेज",
+    "अपलोड की गई फाइल",
+    "अपलोड किया गया दस्तावेज",
+)
+
+GENERIC_DOCUMENT_ACTIONS = (
+    "give details",
+    "provide details",
+    "generate information",
+    "give information",
+    "provide information",
+    "summarize",
+    "summary",
+    "prepare note",
+    "draft information",
+    "use details",
+    "based on",
+    "according to",
+    "from",
+    "explain",
+    "describe",
+    "write about",
+    "make note",
+    "details",
+    "information",
+    "summary",
+    "बताएं",
+    "जानकारी दें",
+    "विवरण दें",
+    "सूचना दें",
+    "तैयार करें",
+    "आधार पर",
+    "के अनुसार",
+    "सारांश",
+    "समझाएं",
+    "विवरण",
+    "जानकारी",
+)
+
 
 def _normalize_text(text: str) -> str:
     return re.sub(r"[^0-9A-Za-z\u0900-\u097F\s]+", " ", (text or "").lower())
@@ -232,6 +331,15 @@ def _parse_relevance_decision(raw_response: str) -> bool | None:
     if normalized.startswith("no"):
         return False
     return None
+
+
+def _is_generic_document_guidance(text: str) -> bool:
+    normalized = _normalize_text(text)
+    if any(pattern in normalized for pattern in GENERIC_DOCUMENT_GUIDANCE_PATTERNS):
+        return True
+    has_reference = any(pattern in normalized for pattern in GENERIC_DOCUMENT_REFERENCES)
+    has_action = any(pattern in normalized for pattern in GENERIC_DOCUMENT_ACTIONS)
+    return has_reference and has_action
 
 
 async def get_document_with_relations(db: AsyncSession, doc_id: str):
@@ -310,10 +418,17 @@ async def validate_instruction_relevance(
     reference_id: str,
     instructions: str,
     organization_id: str,
+    template_id: str | None = None,
     current_user: User | None = None,
 ) -> str | None:
     stripped = instructions.strip()
     if not stripped:
+        return None
+
+    # Information drafts often use generic guidance such as
+    # "use selected file details" or "based on selected document".
+    # Allow these, but still reject unrelated global prompts.
+    if template_id == "information" and _is_generic_document_guidance(stripped):
         return None
 
     terms = _extract_significant_terms(stripped)

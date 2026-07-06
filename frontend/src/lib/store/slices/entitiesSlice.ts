@@ -1,7 +1,5 @@
-'use client'
-
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
-import type { Department, Document, DocumentType } from '@/lib/types'
+import type { Department, DocumentType } from '@/lib/types'
 
 type CacheStatus = 'idle' | 'loading' | 'succeeded' | 'failed'
 
@@ -13,7 +11,6 @@ interface ListCache<T> {
 }
 
 interface EntitiesState {
-  documentsByOrg: Record<string, ListCache<Document>>
   departmentsByKey: Record<string, ListCache<Department>>
   documentTypesByKey: Record<string, ListCache<DocumentType>>
 }
@@ -26,7 +23,6 @@ const emptyCache = <T,>(): ListCache<T> => ({
 })
 
 const initialState: EntitiesState = {
-  documentsByOrg: {},
   departmentsByKey: {},
   documentTypesByKey: {},
 }
@@ -39,35 +35,6 @@ const entitiesSlice = createSlice({
   name: 'entities',
   initialState,
   reducers: {
-    setDocumentsLoading(state, action: PayloadAction<string>) {
-      state.documentsByOrg[action.payload] = {
-        ...ensureCache(state.documentsByOrg, action.payload),
-        status: 'loading',
-        error: null,
-      }
-    },
-    setDocumentsSuccess(state, action: PayloadAction<{ key: string; items: Document[] }>) {
-      state.documentsByOrg[action.payload.key] = {
-        items: action.payload.items,
-        status: 'succeeded',
-        loaded: true,
-        error: null,
-      }
-    },
-    setDocumentsFailure(state, action: PayloadAction<{ key: string; error: string }>) {
-      state.documentsByOrg[action.payload.key] = {
-        ...ensureCache(state.documentsByOrg, action.payload.key),
-        status: 'failed',
-        error: action.payload.error,
-      }
-    },
-    invalidateDocuments(state, action: PayloadAction<string | undefined>) {
-      if (action.payload) {
-        delete state.documentsByOrg[action.payload]
-        return
-      }
-      state.documentsByOrg = {}
-    },
     setDepartmentsLoading(state, action: PayloadAction<string>) {
       state.departmentsByKey[action.payload] = {
         ...ensureCache(state.departmentsByKey, action.payload),
@@ -130,10 +97,6 @@ const entitiesSlice = createSlice({
 })
 
 export const {
-  setDocumentsLoading,
-  setDocumentsSuccess,
-  setDocumentsFailure,
-  invalidateDocuments,
   setDepartmentsLoading,
   setDepartmentsSuccess,
   setDepartmentsFailure,

@@ -6,8 +6,6 @@ import { AppLayout } from '@/components/Layout/AppLayout'
 import { Button, Card, Spinner } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
 import { api, redirectIfUnauthorized } from '@/lib/api'
-import { ensureDocuments } from '@/lib/store/catalog'
-import { store } from '@/lib/store'
 import { useAppDispatch, useAppSelector } from '@/lib/store/hooks'
 import { patchAiDraft, resetAiDraft } from '@/lib/store/slices/formsSlice'
 import { toast } from '@/lib/toast'
@@ -226,7 +224,7 @@ function AIDraftContent() {
   const searchParams = useSearchParams()
 
   const [templates, setTemplates] = useState<DraftTemplate[]>([])
-  const documents = useAppSelector((state) => state.entities.documentsByOrg[orgId]?.items || [])
+  const [documents, setDocuments] = useState<Document[]>([])
   const {
     selectedTemplate,
     selectedDoc,
@@ -266,7 +264,7 @@ function AIDraftContent() {
   useEffect(() => {
     if (!orgId) return
     api.drafts.templates().then(setTemplates).catch(() => {})
-    ensureDocuments(dispatch, store.getState, orgId).catch(() => {})
+    api.files.documents.list(orgId).then(setDocuments).catch(() => {})
   }, [dispatch, orgId])
 
   useEffect(() => {

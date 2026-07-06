@@ -16,11 +16,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <head>
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+      <body style={{ fontFamily: 'Manrope, system-ui, sans-serif' }} data-theme="sunrise">
         <AppProviders>
           <AuthProvider>
             <LanguageProvider>
