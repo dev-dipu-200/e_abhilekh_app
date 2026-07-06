@@ -12,15 +12,24 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 @router.get("/")
 async def list_users(
+    organization_id: str | None = Query(None),
+    cursor: str | None = Query(None),
+    limit: int = Query(25, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if current_user.is_superuser:
-        users = await user_service.get_users(db)
+        page = await user_service.get_users(db, organization_id=organization_id, cursor=cursor, limit=limit)
     else:
-        users = await user_service.get_users(db, organization_id=current_user.organization_id)
-        users = [u for u in users if not u.is_superuser]
-    return SuccessResponse(result=[UserResponse.model_validate(u) for u in users], message="Users retrieved successfully", status_code=200)
+        page = await user_service.get_users(
+            db,
+            organization_id=current_user.organization_id,
+            cursor=cursor,
+            limit=limit,
+            exclude_superusers=True,
+        )
+    page.items = [UserResponse.model_validate(u) for u in page.items]
+    return SuccessResponse(result=page, message="Users retrieved successfully", status_code=200)
 
 
 @router.get("/{user_id}")

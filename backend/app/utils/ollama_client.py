@@ -118,7 +118,41 @@ def stream_chat(
         ollama_base_url=settings.OLLAMA_BASE_URL,
     )
     if runtime.provider == "openai":
-        yield chat(messages, temperature=temperature, num_predict=num_predict, runtime=runtime)
+        with httpx.stream(
+            "POST",
+            "https://api.openai.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {runtime.openai_api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": runtime.generation_model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": num_predict,
+                "stream": True,
+            },
+            timeout=300,
+        ) as resp:
+            resp.raise_for_status()
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+                if line.startswith("data: "):
+                    payload = line[6:].strip()
+                    if payload == "[DONE]":
+                        break
+                    try:
+                        data = json.loads(payload)
+                    except json.JSONDecodeError:
+                        continue
+                    choices = data.get("choices") or []
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta") or {}
+                    content = delta.get("content")
+                    if isinstance(content, str) and content:
+                        yield content
         return
 
     payload = {

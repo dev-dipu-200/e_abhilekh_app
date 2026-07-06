@@ -8,10 +8,17 @@ from app.database.file_model import Document, Folder, Department, DocumentType, 
 from app.database.user_model import Organization, User
 from app.module.file_manage.schema import DocumentCreate, DocumentUpdate, FolderCreate, SearchResultItem
 from app.utils.ai_runtime import resolve_ai_config, resolve_org_ai_config
+from app.utils.pagination import paginate_select, paginate_sequence
 from app.utils.qdrant_store import search as qdrant_search, delete_document_chunks
 
 
-async def get_documents(db: AsyncSession, organization_id: str, folder_id: str | None = None):
+async def get_documents(
+    db: AsyncSession,
+    organization_id: str,
+    folder_id: str | None = None,
+    cursor: str | None = None,
+    limit: int = 25,
+):
     stmt = select(Document).options(
         joinedload(Document.department),
         joinedload(Document.document_type),
@@ -19,9 +26,8 @@ async def get_documents(db: AsyncSession, organization_id: str, folder_id: str |
     ).where(Document.organization_id == organization_id)
     if folder_id:
         stmt = stmt.where(Document.folder_id == folder_id)
-    stmt = stmt.order_by(Document.created_at.desc())
-    result = await db.execute(stmt)
-    return result.unique().scalars().all()
+    stmt = stmt.order_by(Document.created_at.desc(), Document.id.desc())
+    return await paginate_select(db, stmt, cursor=cursor, limit=limit, unique=True)
 
 
 async def get_document(db: AsyncSession, doc_id: str):
@@ -121,14 +127,20 @@ async def delete_document(db: AsyncSession, doc_id: str, user_id: str | None = N
     return True
 
 
-async def get_folders(db: AsyncSession, organization_id: str, parent_id: str | None = None):
+async def get_folders(
+    db: AsyncSession,
+    organization_id: str,
+    parent_id: str | None = None,
+    cursor: str | None = None,
+    limit: int = 25,
+):
     stmt = select(Folder).where(Folder.organization_id == organization_id)
     if parent_id:
         stmt = stmt.where(Folder.parent_id == parent_id)
     else:
         stmt = stmt.where(Folder.parent_id.is_(None))
-    result = await db.execute(stmt)
-    return result.scalars().all()
+    stmt = stmt.order_by(Folder.created_at.desc(), Folder.id.desc())
+    return await paginate_select(db, stmt, cursor=cursor, limit=limit)
 
 
 async def create_folder(db: AsyncSession, data: FolderCreate, user_id: str):
@@ -172,8 +184,8 @@ async def search_documents(
     date_from: str | None = None,
     date_to: str | None = None,
     status: str | None = None,
-    page: int = 1,
-) -> list[SearchResultItem]:
+    cursor: str | None = None,
+):
     start = time.time()
     org_result = await db.execute(select(Organization).where(Organization.id == organization_id))
     organization = org_result.scalar_one_or_none()
@@ -239,8 +251,7 @@ async def search_documents(
             file_date=str(doc.document_date) if doc.document_date else None,
         ))
 
-    offset = (page - 1) * limit
-    return items[offset:offset + limit]
+    return paginate_sequence(items, cursor=cursor, limit=limit)
 
 
 def get_departments(db: AsyncSession, organization_id: str):

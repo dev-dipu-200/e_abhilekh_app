@@ -4,14 +4,23 @@ from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.user_model import User
 from app.module.users.schema import UserCreate, UserUpdate
+from app.utils.pagination import paginate_select
 
 
-async def get_users(db: AsyncSession, organization_id: str | None = None):
+async def get_users(
+    db: AsyncSession,
+    organization_id: str | None = None,
+    cursor: str | None = None,
+    limit: int = 25,
+    exclude_superusers: bool = False,
+):
     stmt = select(User)
     if organization_id:
         stmt = stmt.where(User.organization_id == organization_id)
-    result = await db.execute(stmt)
-    return result.scalars().all()
+    if exclude_superusers:
+        stmt = stmt.where(User.is_superuser.is_(False))
+    stmt = stmt.order_by(User.created_at.desc(), User.id.desc())
+    return await paginate_select(db, stmt, cursor=cursor, limit=limit)
 
 
 async def get_user(db: AsyncSession, user_id: str):

@@ -3,14 +3,15 @@ from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.user_model import Role
 from app.module.role.schema import RoleCreate, RoleUpdate
+from app.utils.pagination import paginate_select
 
 
-async def get_roles(db: AsyncSession, organization_id: str | None = None):
+async def get_roles(db: AsyncSession, organization_id: str | None = None, cursor: str | None = None, limit: int = 25):
     stmt = select(Role)
     if organization_id:
         stmt = stmt.where(Role.organization_id == organization_id)
-    result = await db.execute(stmt)
-    return result.scalars().all()
+    stmt = stmt.order_by(Role.created_at.desc(), Role.id.desc())
+    return await paginate_select(db, stmt, cursor=cursor, limit=limit)
 
 
 async def get_role(db: AsyncSession, role_id: str):

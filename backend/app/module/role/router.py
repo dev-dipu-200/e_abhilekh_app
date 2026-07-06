@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.base import get_db
 from app.dependencies import get_current_user, get_current_superuser
@@ -12,14 +12,18 @@ router = APIRouter(prefix="/roles", tags=["Roles"])
 
 @router.get("/")
 async def list_roles(
+    organization_id: str | None = Query(None),
+    cursor: str | None = Query(None),
+    limit: int = Query(25, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if current_user.is_superuser:
-        roles = await role_service.get_roles(db)
+        page = await role_service.get_roles(db, organization_id=organization_id, cursor=cursor, limit=limit)
     else:
-        roles = await role_service.get_roles(db, organization_id=current_user.organization_id)
-    return SuccessResponse(result=[RoleResponse.model_validate(r) for r in roles], message="Roles retrieved successfully", status_code=200)
+        page = await role_service.get_roles(db, organization_id=current_user.organization_id, cursor=cursor, limit=limit)
+    page.items = [RoleResponse.model_validate(r) for r in page.items]
+    return SuccessResponse(result=page, message="Roles retrieved successfully", status_code=200)
 
 
 @router.get("/{role_id}")

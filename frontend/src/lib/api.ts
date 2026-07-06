@@ -53,11 +53,34 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return data
 }
 
+function appendCursorParams(path: string, params: Record<string, string | number | undefined | null>): string {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === '') continue
+    search.set(key, String(value))
+  }
+  if (!search.toString()) return path
+  return `${path}${path.includes('?') ? '&' : '?'}${search.toString()}`
+}
+
+async function requestAllPages<T>(path: string, limit = 100): Promise<T[]> {
+  const items: T[] = []
+  let cursor: string | null | undefined = null
+  do {
+    const page: import('./types').CursorPage<T> = await request<import('./types').CursorPage<T>>(
+      appendCursorParams(path, { cursor, limit })
+    )
+    items.push(...page.items)
+    cursor = page.next_cursor
+  } while (cursor)
+  return items
+}
+
 export { toast }
 
 export const api = {
   organizations: {
-    list: () => request<import('./types').Organization[]>('/organizations/'),
+    list: () => requestAllPages<import('./types').Organization>('/organizations/'),
     get: (id: string) => request<import('./types').Organization>(`/organizations/${id}`),
     create: (data: Partial<import('./types').Organization>) =>
       request<import('./types').Organization>('/organizations/', {
@@ -84,7 +107,7 @@ export const api = {
 
   roles: {
     list: (orgId?: string) =>
-      request<import('./types').Role[]>(`/roles/${orgId ? `?organization_id=${orgId}` : ''}`),
+      requestAllPages<import('./types').Role>(appendCursorParams('/roles/', { organization_id: orgId })),
     get: (id: string) => request<import('./types').Role>(`/roles/${id}`),
     create: (data: Partial<import('./types').Role>) =>
       request<import('./types').Role>('/roles/', { method: 'POST', body: JSON.stringify(data) }),
@@ -95,7 +118,7 @@ export const api = {
 
   users: {
     list: (orgId?: string) =>
-      request<import('./types').User[]>(`/users/${orgId ? `?organization_id=${orgId}` : ''}`),
+      requestAllPages<import('./types').User>(appendCursorParams('/users/', { organization_id: orgId })),
     get: (id: string) => request<import('./types').User>(`/users/${id}`),
     create: (data: Partial<import('./types').User> & { password: string }) =>
       request<import('./types').User>('/users/', { method: 'POST', body: JSON.stringify(data) }),
@@ -106,7 +129,7 @@ export const api = {
 
   departments: {
     list: (orgId?: string) =>
-      request<import('./types').Department[]>(`/departments/${orgId ? `?organization_id=${orgId}` : ''}`),
+      requestAllPages<import('./types').Department>(appendCursorParams('/departments/', { organization_id: orgId })),
     get: (id: string) => request<import('./types').Department>(`/departments/${id}`),
     create: (data: Partial<import('./types').Department>) =>
       request<import('./types').Department>('/departments/', { method: 'POST', body: JSON.stringify(data) }),
@@ -117,7 +140,7 @@ export const api = {
 
   documentTypes: {
     list: (orgId?: string) =>
-      request<import('./types').DocumentType[]>(`/document-types/${orgId ? `?organization_id=${orgId}` : ''}`),
+      requestAllPages<import('./types').DocumentType>(appendCursorParams('/document-types/', { organization_id: orgId })),
     get: (id: string) => request<import('./types').DocumentType>(`/document-types/${id}`),
     create: (data: Partial<import('./types').DocumentType>) =>
       request<import('./types').DocumentType>('/document-types/', { method: 'POST', body: JSON.stringify(data) }),
@@ -129,7 +152,7 @@ export const api = {
   files: {
     documents: {
       list: (orgId: string, folderId?: string) =>
-        request<import('./types').Document[]>(`/files/documents?organization_id=${orgId}${folderId ? `&folder_id=${folderId}` : ''}`),
+        requestAllPages<import('./types').Document>(appendCursorParams('/files/documents', { organization_id: orgId, folder_id: folderId })),
       get: (id: string) => request<import('./types').Document>(`/files/documents/${id}`),
       upload: async (orgId: string, file: File, extra: { department_id: string; document_type_id: string; subject: string; folder_id?: string; parser_type?: string; designation?: string }) => {
         const token = getToken()
@@ -158,22 +181,22 @@ export const api = {
         request<import('./types').Document>(`/files/documents/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
       delete: (id: string) => request<void>(`/files/documents/${id}`, { method: 'DELETE' }),
     },
-    search: (data: { query: string; organization_id: string; language?: string; department_id?: string; document_type_id?: string; year?: number; date_from?: string; date_to?: string; status?: string; page?: number; page_size?: number }) =>
+    search: (data: { query: string; organization_id: string; language?: string; department_id?: string; document_type_id?: string; year?: number; date_from?: string; date_to?: string; status?: string; cursor?: string; page_size?: number }) =>
       request<import('./types').SearchResponse>('/files/search', {
         method: 'POST',
-        body: JSON.stringify({ ...data, language: data.language || 'en', page: data.page || 1, page_size: data.page_size || 10 }),
+        body: JSON.stringify({ ...data, language: data.language || 'en', cursor: data.cursor || null, limit: data.page_size || 10 }),
       }),
     folders: {
       list: (orgId: string, parentId?: string) =>
-        request<import('./types').Folder[]>(`/files/folders?organization_id=${orgId}${parentId ? `&parent_id=${parentId}` : ''}`),
+        requestAllPages<import('./types').Folder>(appendCursorParams('/files/folders', { organization_id: orgId, parent_id: parentId })),
       create: (data: Partial<import('./types').Folder>) =>
         request<import('./types').Folder>('/files/folders', { method: 'POST', body: JSON.stringify(data) }),
       delete: (id: string) => request<void>(`/files/folders/${id}`, { method: 'DELETE' }),
     },
     departmentsList: (orgId: string) =>
-      request<{ id: string; name: string }[]>(`/files/departments-list?organization_id=${orgId}`),
+      requestAllPages<{ id: string; name: string }>(appendCursorParams('/files/departments-list', { organization_id: orgId })),
     documentTypesList: (orgId: string) =>
-      request<{ id: string; name: string }[]>(`/files/document-types-list?organization_id=${orgId}`),
+      requestAllPages<{ id: string; name: string }>(appendCursorParams('/files/document-types-list', { organization_id: orgId })),
   },
 
   drafts: {

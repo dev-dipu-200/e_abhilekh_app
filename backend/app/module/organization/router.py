@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.base import get_db
 from app.dependencies import get_current_user, get_current_superuser, get_current_org_admin
@@ -26,14 +26,17 @@ def _to_response(org) -> OrganizationResponse:
 
 @router.get("/")
 async def list_organizations(
+    cursor: str | None = Query(None),
+    limit: int = Query(25, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if current_user.is_superuser:
-        orgs = await org_service.get_organizations(db)
+        page = await org_service.get_organizations(db, cursor=cursor, limit=limit)
     else:
-        orgs = await org_service.get_organizations(db, org_id=current_user.organization_id)
-    return SuccessResponse(result=[_to_response(o) for o in orgs], message="Organizations retrieved successfully", status_code=200)
+        page = await org_service.get_organizations(db, org_id=current_user.organization_id, cursor=cursor, limit=limit)
+    page.items = [_to_response(o) for o in page.items]
+    return SuccessResponse(result=page, message="Organizations retrieved successfully", status_code=200)
 
 
 @router.get("/{org_id}")

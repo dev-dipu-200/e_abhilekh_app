@@ -3,14 +3,15 @@ from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.file_model import Department
 from app.module.department.schema import DepartmentCreate, DepartmentUpdate
+from app.utils.pagination import paginate_select
 
 
-async def get_departments(db: AsyncSession, organization_id: str | None = None):
+async def get_departments(db: AsyncSession, organization_id: str | None = None, cursor: str | None = None, limit: int = 25):
     stmt = select(Department)
     if organization_id:
         stmt = stmt.where(Department.organization_id == organization_id)
-    result = await db.execute(stmt)
-    return result.scalars().all()
+    stmt = stmt.order_by(Department.created_at.desc(), Department.id.desc())
+    return await paginate_select(db, stmt, cursor=cursor, limit=limit)
 
 
 async def get_department(db: AsyncSession, dept_id: str):

@@ -26,7 +26,7 @@ export default function AISearchPage() {
   const [results, setResults] = useState<SearchResultItem[]>([])
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
-  const [page, setPage] = useState(1)
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const departments = useAppSelector((state) => state.entities.departmentsByKey[scopeKey]?.items || [])
@@ -41,7 +41,7 @@ export default function AISearchPage() {
     ensureDocumentTypes(dispatch, store.getState, orgId, isSuperuser).catch(() => {})
   }, [dispatch, isSuperuser, orgId])
 
-  const doSearch = useCallback(async (pageNum: number = 1, append: boolean = false) => {
+  const doSearch = useCallback(async (cursor?: string | null, append: boolean = false) => {
     if (!query.trim() || !orgId) return
     setLoading(true)
     setSearched(true)
@@ -53,15 +53,15 @@ export default function AISearchPage() {
         department_id: filterDept || undefined,
         document_type_id: filterDocType || undefined,
         year: filterYear ? parseInt(filterYear) : undefined,
-        page: pageNum,
         page_size: 10,
+        cursor: cursor || undefined,
       })
       if (append) {
         setResults(prev => [...prev, ...resp.results])
       } else {
         setResults(resp.results)
       }
-      setPage(pageNum)
+      setNextCursor(resp.next_cursor || null)
       setHasMore(resp.has_more)
       setElapsed(resp.elapsed_ms)
     } finally {
@@ -133,9 +133,9 @@ export default function AISearchPage() {
     if (e.key === 'Escape') setSuggestions([])
   }
 
-  const handleSearch = () => doSearch(1)
+  const handleSearch = () => doSearch(null)
 
-  const loadMore = () => doSearch(page + 1, true)
+  const loadMore = () => doSearch(nextCursor, true)
 
   const clearFilters = () => {
     dispatch(patchAiSearch({ filterDept: '', filterDocType: '', filterYear: '' }))
@@ -145,7 +145,7 @@ export default function AISearchPage() {
     dispatch(resetAiSearch())
     setResults([])
     setSearched(false)
-    setPage(1)
+    setNextCursor(null)
     setHasMore(false)
     setElapsed(0)
     setSuggestions([])

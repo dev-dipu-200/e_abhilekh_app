@@ -5,6 +5,7 @@ from app.database.file_model import Document
 from app.database.user_model import Organization
 from app.module.organization.schema import OrganizationCreate, OrganizationUpdate
 from app.module.file_manage.tasks import process_document_file
+from app.utils.pagination import paginate_select
 from app.utils.ai_runtime import resolve_org_ai_config
 
 
@@ -38,12 +39,12 @@ async def _enqueue_reindex_for_organization(db: AsyncSession, org_id: str) -> No
         process_document_file.delay(document_id)
 
 
-async def get_organizations(db: AsyncSession, org_id: str | None = None):
+async def get_organizations(db: AsyncSession, org_id: str | None = None, cursor: str | None = None, limit: int = 25):
     stmt = select(Organization)
     if org_id:
         stmt = stmt.where(Organization.id == org_id)
-    result = await db.execute(stmt)
-    return result.scalars().all()
+    stmt = stmt.order_by(Organization.created_at.desc(), Organization.id.desc())
+    return await paginate_select(db, stmt, cursor=cursor, limit=limit)
 
 
 async def get_organization(db: AsyncSession, org_id: str):

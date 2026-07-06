@@ -98,8 +98,8 @@ class SearchQuery(BaseModel):
     date_from: str | None = None
     date_to: str | None = None
     status: str | None = None
-    page: int = 1
-    page_size: int = 10
+    cursor: str | None = None
+    limit: int = 10
 
 
 class SearchResultItem(BaseModel):
@@ -124,7 +124,7 @@ class SearchResponse(BaseModel):
     language: str
     results: list[SearchResultItem]
     total: int = 0
-    page: int = 1
+    next_cursor: str | None = None
     has_more: bool = False
     elapsed_ms: int = 0
 

@@ -26,11 +26,18 @@ def _populate_previews(resp: DocumentResponse, base_url: str = "") -> DocumentRe
 
 
 @router.get("/documents")
-async def list_documents(organization_id: str, request: Request, folder_id: str | None = Query(None), db: AsyncSession = Depends(get_db)):
+async def list_documents(
+    organization_id: str,
+    request: Request,
+    folder_id: str | None = Query(None),
+    cursor: str | None = Query(None),
+    limit: int = Query(25, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
     base = str(request.base_url).rstrip("/")
-    docs = await file_service.get_documents(db, organization_id, folder_id)
+    page = await file_service.get_documents(db, organization_id, folder_id, cursor=cursor, limit=limit)
     results = []
-    for d in docs:
+    for d in page.items:
         dept_name = d.department.name if d.department else None
         doctype_name = d.document_type.name if d.document_type else None
         org_name = d.organization.name if d.organization else None
@@ -40,7 +47,8 @@ async def list_documents(organization_id: str, request: Request, folder_id: str 
         resp.organization_name = org_name
         resp = _populate_previews(resp, base)
         results.append(resp)
-    return SuccessResponse(result=results, message="Documents retrieved successfully", status_code=200)
+    page.items = results
+    return SuccessResponse(result=page, message="Documents retrieved successfully", status_code=200)
 
 
 @router.get("/documents/{doc_id}")
@@ -136,9 +144,16 @@ async def download_document(doc_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/folders")
-async def list_folders(organization_id: str, parent_id: str | None = Query(None), db: AsyncSession = Depends(get_db)):
-    folders = await file_service.get_folders(db, organization_id, parent_id)
-    return SuccessResponse(result=[FolderResponse.model_validate(f) for f in folders], message="Folders retrieved successfully", status_code=200)
+async def list_folders(
+    organization_id: str,
+    parent_id: str | None = Query(None),
+    cursor: str | None = Query(None),
+    limit: int = Query(25, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    page = await file_service.get_folders(db, organization_id, parent_id, cursor=cursor, limit=limit)
+    page.items = [FolderResponse.model_validate(f) for f in page.items]
+    return SuccessResponse(result=page, message="Folders retrieved successfully", status_code=200)
 
 
 @router.post("/folders", status_code=201)
@@ -156,24 +171,24 @@ async def search_documents(data: SearchQuery, db: AsyncSession = Depends(get_db)
         query=data.query,
         organization_id=data.organization_id,
         current_user=current_user,
-        limit=data.page_size,
+        limit=data.limit,
         department_id=data.department_id,
         document_type_id=data.document_type_id,
         year=data.year,
         date_from=data.date_from,
         date_to=data.date_to,
         status=data.status,
-        page=data.page,
+        cursor=data.cursor,
     )
     elapsed = int((time.time() - start) * 1000)
     return SuccessResponse(
         result=SearchResponse(
             query=data.query,
             language=data.language,
-            results=results,
-            total=len(results),
-            page=data.page,
-            has_more=len(results) >= data.page_size,
+            results=results.items,
+            total=len(results.items),
+            next_cursor=results.next_cursor,
+            has_more=results.has_more,
             elapsed_ms=elapsed,
         ),
         message="Search completed",
@@ -182,21 +197,33 @@ async def search_documents(data: SearchQuery, db: AsyncSession = Depends(get_db)
 
 
 @router.get("/departments-list")
-async def list_departments(organization_id: str, db: AsyncSession = Depends(get_db)):
+async def list_departments(
+    organization_id: str,
+    cursor: str | None = Query(None),
+    limit: int = Query(25, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
     from app.database.file_model import Department
-    stmt = select(Department).where(Department.organization_id == organization_id)
-    result = await db.execute(stmt)
-    depts = result.scalars().all()
-    return SuccessResponse(result=[{"id": d.id, "name": d.name} for d in depts], message="Departments retrieved", status_code=200)
+    from app.utils.pagination import paginate_select
+    stmt = select(Department).where(Department.organization_id == organization_id).order_by(Department.created_at.desc(), Department.id.desc())
+    page = await paginate_select(db, stmt, cursor=cursor, limit=limit)
+    page.items = [{"id": d.id, "name": d.name} for d in page.items]
+    return SuccessResponse(result=page, message="Departments retrieved", status_code=200)
 
 
 @router.get("/document-types-list")
-async def list_document_types(organization_id: str, db: AsyncSession = Depends(get_db)):
+async def list_document_types(
+    organization_id: str,
+    cursor: str | None = Query(None),
+    limit: int = Query(25, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
     from app.database.file_model import DocumentType
-    stmt = select(DocumentType).where(DocumentType.organization_id == organization_id)
-    result = await db.execute(stmt)
-    types = result.scalars().all()
-    return SuccessResponse(result=[{"id": t.id, "name": t.name} for t in types], message="Document types retrieved", status_code=200)
+    from app.utils.pagination import paginate_select
+    stmt = select(DocumentType).where(DocumentType.organization_id == organization_id).order_by(DocumentType.created_at.desc(), DocumentType.id.desc())
+    page = await paginate_select(db, stmt, cursor=cursor, limit=limit)
+    page.items = [{"id": t.id, "name": t.name} for t in page.items]
+    return SuccessResponse(result=page, message="Document types retrieved", status_code=200)
 
 
 @router.delete("/folders/{folder_id}")

@@ -3,14 +3,15 @@ from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.file_model import DocumentType
 from app.module.document_type.schema import DocumentTypeCreate, DocumentTypeUpdate
+from app.utils.pagination import paginate_select
 
 
-async def get_document_types(db: AsyncSession, organization_id: str | None = None):
+async def get_document_types(db: AsyncSession, organization_id: str | None = None, cursor: str | None = None, limit: int = 25):
     stmt = select(DocumentType)
     if organization_id:
         stmt = stmt.where(DocumentType.organization_id == organization_id)
-    result = await db.execute(stmt)
-    return result.scalars().all()
+    stmt = stmt.order_by(DocumentType.created_at.desc(), DocumentType.id.desc())
+    return await paginate_select(db, stmt, cursor=cursor, limit=limit)
 
 
 async def get_document_type(db: AsyncSession, doc_type_id: str):

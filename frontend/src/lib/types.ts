@@ -137,9 +137,16 @@ export interface SearchResponse {
   language: string
   results: SearchResultItem[]
   total: number
-  page: number
+  next_cursor?: string | null
   has_more: boolean
   elapsed_ms: number
+}
+
+export interface CursorPage<T> {
+  items: T[]
+  next_cursor?: string | null
+  has_more: boolean
+  limit: number
 }
 
 export interface DraftTemplate {

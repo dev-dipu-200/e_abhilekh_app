@@ -271,7 +271,7 @@ async def get_relevant_records(
     query: str,
     organization_id: str,
     current_user: User | None = None,
-    limit: int = 8,
+    limit: int = 4,
     secondary_query: str = "",
 ) -> list[SearchResultItem]:
     """Retrieve semantically relevant records for draft context.
@@ -296,7 +296,7 @@ async def get_relevant_records(
             document_id=r["document_id"],
             document_subject=r.get("subject"),
             chunk_id=r["chunk_id"],
-            content=r["content"][:600],  # More context per snippet
+            content=r["content"][:350],
             score=r["score"],
             page_number=r.get("page_number"),
             match_type="semantic",
@@ -336,6 +336,25 @@ async def validate_instruction_relevance(
         ref_full_text,
     ]
     match_count = _count_term_matches(terms, " ".join(metadata_parts))
+    minimum_keyword_matches = max(2, min(3, len(terms) // 2))
+
+    if match_count >= minimum_keyword_matches:
+        return None
+
+    semantic_hits = qdrant_search(stripped, organization_id, runtime, limit=4)
+    best_reference_score = max(
+        (
+            hit.get("score", 0)
+            for hit in semantic_hits
+            if hit.get("document_id") == reference_id
+        ),
+        default=0,
+    )
+
+    if best_reference_score >= 0.35:
+        return None
+    if best_reference_score < 0.18 and match_count == 0:
+        return UNRELATED_INSTRUCTION_MESSAGE
 
     dept_name = ref_doc.department.name if ref_doc.department else ""
     doctype_name = ref_doc.document_type.name if ref_doc.document_type else ""
@@ -370,26 +389,14 @@ async def validate_instruction_relevance(
                 {"role": "user", "content": relevance_prompt},
             ],
             temperature=0.0,
-            num_predict=32,
+            num_predict=24,
             runtime=runtime,
         )
         llm_decision = _parse_relevance_decision(llm_result)
         if llm_decision is True:
             return None
-        if llm_decision is False:
-            return UNRELATED_INSTRUCTION_MESSAGE
     except Exception:
         pass
-
-    semantic_hits = qdrant_search(stripped, organization_id, runtime, limit=8)
-    has_semantic_match = any(
-        hit.get("document_id") == reference_id and hit.get("score", 0) >= 0.45
-        for hit in semantic_hits
-    )
-
-    minimum_keyword_matches = max(2, min(3, len(terms) // 2))
-    if has_semantic_match or match_count >= minimum_keyword_matches:
-        return None
 
     return UNRELATED_INSTRUCTION_MESSAGE
 
@@ -433,7 +440,7 @@ async def build_draft_context(
     # Fetch full extracted text for richer LLM grounding
     ref_full_text = ""
     if ref_doc:
-        ref_full_text = await get_document_full_text(db, reference_id, max_chars=3000)
+        ref_full_text = await get_document_full_text(db, reference_id, max_chars=1800)
 
     # Use query expansion: combine subject + user instructions for broader relevant record retrieval
     relevant_records = await get_relevant_records(
@@ -447,7 +454,7 @@ async def build_draft_context(
     if relevant_records:
         records_lines = []
         for r in relevant_records:
-            records_lines.append(f"- {r.document_subject or 'Doc'}: {r.content[:500]}")
+            records_lines.append(f"- {r.document_subject or 'Doc'}: {r.content[:300]}")
         records_text = "\n".join(records_lines)
 
     visible_language = "Hindi" if language == "hi" else "English"
@@ -590,7 +597,7 @@ def generate_draft_stream(context: dict):
             {"role": "user", "content": context["prompt"]},
         ],
         temperature=0.5,
-        num_predict=2048,
+        num_predict=1200,
         runtime=context["runtime"],
     )
 
@@ -602,7 +609,7 @@ def generate_draft_non_stream(context: dict) -> str:
             {"role": "user", "content": context["prompt"]},
         ],
         temperature=0.5,
-        num_predict=2048,
+        num_predict=1200,
         runtime=context["runtime"],
     )
 
