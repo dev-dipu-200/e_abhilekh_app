@@ -20,6 +20,12 @@ def _get_doc(session: Session, doc_id: str) -> Document | None:
     return session.query(Document).filter(Document.id == doc_id).first()
 
 
+def _clear_existing_chunks(session: Session, document_id: str) -> None:
+    delete_document_chunks(document_id)
+    session.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
+    session.flush()
+
+
 def _chunk_text(text: str, max_chars: int = 800) -> list[tuple[str, int]]:
     """Split text into semantically meaningful chunks.
     
@@ -108,6 +114,7 @@ def process_document_file(self, document_id: str):
         pages = result.get("pages") or []
         if raw_text.strip():
             try:
+                _clear_existing_chunks(session, document_id)
                 chunk_texts = []
                 qdrant_chunks = []
                 chunk_index = 0

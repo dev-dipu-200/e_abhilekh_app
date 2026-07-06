@@ -1,7 +1,8 @@
+import type { ReactNode } from 'react'
 import clsx from 'clsx'
 
 interface BadgeProps {
-  children: string
+  children: ReactNode
   variant?: 'green' | 'red' | 'yellow' | 'blue' | 'gray'
 }
 

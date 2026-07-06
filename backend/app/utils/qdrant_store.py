@@ -6,7 +6,7 @@ from app.settings.config import settings
 from app.utils.embeddings import encode_query
 
 
-COLLECTION_NAME = "documents_v3"
+COLLECTION_NAME = "documents_v4"
 VECTOR_SIZE = settings.OLLAMA_EMBEDDING_DIMENSIONS
 
 
@@ -59,6 +59,9 @@ def upsert_chunks(chunks: list[dict]):
 
 def delete_document_chunks(document_id: str):
     client = _get_client()
+    collections = client.get_collections().collections
+    if not any(c.name == COLLECTION_NAME for c in collections):
+        return
     client.delete(
         collection_name=COLLECTION_NAME,
         points_selector=models.Filter(
@@ -83,7 +86,7 @@ def search(
     """Semantic search with score threshold and optional metadata pre-filtering.
     
     Score threshold of 0.30 removes clearly irrelevant results while keeping
-    most semantically relevant ones (cosine similarity on qwen3-embedding:8b).
+    most semantically relevant results for qwen3-embedding:8b vectors.
     Results are re-ranked with a small keyword-boost to surface exact matches.
     """
     ensure_collection()

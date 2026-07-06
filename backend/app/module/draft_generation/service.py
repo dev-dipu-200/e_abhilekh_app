@@ -136,6 +136,17 @@ CRITICAL RULES:
 6. No markdown, no code fences, no JSON markers.""",
 }
 
+
+def _build_system_prompt(template_id: str, language: str) -> str:
+    base_prompt = SYSTEM_PROMPTS.get(template_id, "")
+    language_name = "Hindi" if language == "hi" else "English"
+    runtime_note = (
+        f"You are running on the quantized Ollama model `{settings.OLLAMA_GENERATION_MODEL}`. "
+        f"Generate the final response directly in {language_name}, follow the required structure exactly, "
+        "and do not mention the model, quantization, or backend pipeline in the visible draft."
+    )
+    return f"{runtime_note}\n\n{base_prompt}".strip()
+
 HINDI_LANGUAGE_RULES = """LANGUAGE RULES (Hindi mode):
 - Every visible field MUST be in formal Hindi written in Devanagari script only.
 - NO English in brackets. Do NOT write 'Hindi (English)'.
@@ -432,6 +443,7 @@ async def build_draft_context(
         f"Selected format: {template_name}",
         f"Target language: {visible_language}",
         f"Tone: {tone}",
+        f"Active generation model: {settings.OLLAMA_GENERATION_MODEL} (Quantized via Ollama)",
         "",
         "=== REFERENCE DOCUMENT METADATA ===",
         ref_context,
@@ -548,10 +560,11 @@ async def build_draft_context(
 
     return {
         "prompt": "\n".join(prompt_parts),
-        "system_prompt": SYSTEM_PROMPTS.get(template_id, ""),
+        "system_prompt": _build_system_prompt(template_id, language),
         "reference_document": ref_doc,
         "relevant_records": relevant_records,
         "subject": subject,
+        "generation_model": settings.OLLAMA_GENERATION_MODEL,
     }
 
 

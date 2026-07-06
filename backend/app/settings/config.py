@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     GOOGLE_DOCUMENT_AI_LOCATION: str = "us"
     OLLAMA_BASE_URL: str = "https://ollamamodel.devtrust.biz"
     OLLAMA_EMBEDDING_MODEL: str = "qwen3-embedding:8b"
-    OLLAMA_EMBEDDING_DIMENSIONS: int = 1024
-    OLLAMA_GENERATION_MODEL: str = "llama3.1:8b"
+    OLLAMA_EMBEDDING_DIMENSIONS: int = 4096
+    OLLAMA_GENERATION_MODEL: str = "qwen3:8b"
 
     class Config:
         env_file = ".env"
