@@ -16,6 +16,8 @@ import {
 
 export const ALL_SCOPE_KEY = '__all__'
 
+const INCOMPLETE_PROCESSING_STATES = new Set(['PENDING', 'IN_PROGRESS'])
+
 export function getScopeKey(isSuperuser: boolean, organizationId: string) {
   return isSuperuser ? ALL_SCOPE_KEY : organizationId
 }
@@ -28,7 +30,8 @@ export async function ensureDocuments(
 ) {
   if (!organizationId) return
   const cache = getState().entities.documentsByOrg[organizationId]
-  if (!force && cache?.loaded) return
+  const hasIncompleteDocs = !!cache?.items?.some((doc) => INCOMPLETE_PROCESSING_STATES.has(doc.processing_state))
+  if (!force && cache?.loaded && !hasIncompleteDocs) return
   dispatch(setDocumentsLoading(organizationId))
   try {
     const items = await api.files.documents.list(organizationId)

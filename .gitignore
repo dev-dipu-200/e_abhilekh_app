@@ -1,6 +1,6 @@
 # Environment
+.env.*
 .env
-.env.local
 
 # Python
 __pycache__/
@@ -32,9 +32,11 @@ files/
 staticfiles/
 
 # opencode -s ses_0dec2c74cffeP3eTuX3DzfGIZd
+# codex resume 019f35bf-5449-7ac3-94d1-8d61a4d096d4
 # Added by code-review-graph
 .code-review-graph/
 .*/
 *.md
 *.json
 previews/
+temp.py
