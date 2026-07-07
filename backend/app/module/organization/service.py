@@ -7,30 +7,12 @@ from app.module.organization.schema import OrganizationCreate, OrganizationUpdat
 from app.module.file_manage.tasks import process_document_file
 from app.utils.pagination import paginate_select
 from app.utils.ai_runtime import resolve_org_ai_config
-
-
-def _normalize_openai_key(value: str | None) -> str | None:
-    if value is None:
-        return None
-    cleaned = value.strip()
-    return cleaned or None
-
-
-def _validate_ai_config(
-    *,
-    ai_provider: str,
-    openai_api_key: str | None,
-    openai_embedding_model: str | None,
-    openai_llm_model: str | None,
-) -> None:
-    if ai_provider != "openai":
-        return
-    if not openai_api_key:
-        raise HTTPException(status_code=400, detail="OpenAI API key is required when AI provider is OpenAI")
-    if not openai_embedding_model:
-        raise HTTPException(status_code=400, detail="OpenAI embedding model is required when AI provider is OpenAI")
-    if not openai_llm_model:
-        raise HTTPException(status_code=400, detail="OpenAI LLM model is required when AI provider is OpenAI")
+from app.utils.openai_config import (
+    ensure_unique_openai_api_key,
+    normalize_model_name,
+    normalize_openai_key,
+    validate_openai_model_pair,
+)
 
 
 async def _enqueue_reindex_for_organization(db: AsyncSession, org_id: str) -> None:
@@ -58,15 +40,16 @@ async def create_organization(db: AsyncSession, data: OrganizationCreate):
         raise HTTPException(status_code=409, detail="An organization with this name already exists")
     payload = data.model_dump()
     payload["ai_provider"] = (payload.get("ai_provider") or "ollama").strip().lower()
-    payload["openai_api_key"] = _normalize_openai_key(payload.get("openai_api_key"))
-    payload["openai_embedding_model"] = (payload.get("openai_embedding_model") or "").strip() or None
-    payload["openai_llm_model"] = (payload.get("openai_llm_model") or "").strip() or None
-    _validate_ai_config(
+    payload["openai_api_key"] = normalize_openai_key(payload.get("openai_api_key"))
+    payload["openai_embedding_model"] = normalize_model_name(payload.get("openai_embedding_model"))
+    payload["openai_llm_model"] = normalize_model_name(payload.get("openai_llm_model"))
+    validate_openai_model_pair(
         ai_provider=payload["ai_provider"],
         openai_api_key=payload.get("openai_api_key"),
         openai_embedding_model=payload.get("openai_embedding_model"),
         openai_llm_model=payload.get("openai_llm_model"),
     )
+    await ensure_unique_openai_api_key(db, openai_api_key=payload.get("openai_api_key"))
     org = Organization(**payload)
     db.add(org)
     await db.commit()
@@ -88,11 +71,11 @@ async def update_organization(db: AsyncSession, org_id: str, data: OrganizationU
     if "ai_provider" in update_data and update_data["ai_provider"] is not None:
         update_data["ai_provider"] = update_data["ai_provider"].strip().lower()
     if "openai_api_key" in update_data:
-        update_data["openai_api_key"] = _normalize_openai_key(update_data["openai_api_key"])
+        update_data["openai_api_key"] = normalize_openai_key(update_data["openai_api_key"])
     if "openai_embedding_model" in update_data:
-        update_data["openai_embedding_model"] = (update_data["openai_embedding_model"] or "").strip() or None
+        update_data["openai_embedding_model"] = normalize_model_name(update_data["openai_embedding_model"])
     if "openai_llm_model" in update_data:
-        update_data["openai_llm_model"] = (update_data["openai_llm_model"] or "").strip() or None
+        update_data["openai_llm_model"] = normalize_model_name(update_data["openai_llm_model"])
 
     clear_api_key = bool(update_data.pop("clear_openai_api_key", False))
     effective_provider = update_data.get("ai_provider", org.ai_provider or "ollama")
@@ -104,11 +87,16 @@ async def update_organization(db: AsyncSession, org_id: str, data: OrganizationU
         effective_api_key = None
         org.openai_api_key = None
 
-    _validate_ai_config(
+    validate_openai_model_pair(
         ai_provider=effective_provider,
         openai_api_key=effective_api_key,
         openai_embedding_model=effective_embedding_model,
         openai_llm_model=effective_llm_model,
+    )
+    await ensure_unique_openai_api_key(
+        db,
+        openai_api_key=effective_api_key,
+        exclude_organization_id=org.id,
     )
 
     for key, val in update_data.items():

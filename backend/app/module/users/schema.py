@@ -18,8 +18,10 @@ class UserCreate(UserBase):
 
 class UserUpdate(BaseModel):
     email: str | None = None
+    username: str | None = None
     full_name: str | None = None
     employee_id: str | None = None
+    organization_id: str | None = None
     role_id: str | None = None
     is_active: bool | None = None
 

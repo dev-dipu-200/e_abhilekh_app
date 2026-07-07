@@ -1,4 +1,3 @@
-from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,30 +6,12 @@ from app.database.user_model import Organization, User
 from app.module.file_manage.tasks import process_document_file
 from app.module.settings.schema import AISettingsUpdate
 from app.utils.ai_runtime import resolve_ai_config
-
-
-def _normalize_text(value: str | None) -> str | None:
-    if value is None:
-        return None
-    cleaned = value.strip()
-    return cleaned or None
-
-
-def _validate_ai_settings(
-    *,
-    ai_provider: str,
-    openai_api_key: str | None,
-    openai_embedding_model: str | None,
-    openai_llm_model: str | None,
-) -> None:
-    if ai_provider != "openai":
-        return
-    if not openai_api_key:
-        raise HTTPException(status_code=400, detail="OpenAI API key is required when AI provider is OpenAI")
-    if not openai_embedding_model:
-        raise HTTPException(status_code=400, detail="OpenAI embedding model is required when AI provider is OpenAI")
-    if not openai_llm_model:
-        raise HTTPException(status_code=400, detail="OpenAI LLM model is required when AI provider is OpenAI")
+from app.utils.openai_config import (
+    ensure_unique_openai_api_key,
+    normalize_model_name,
+    normalize_openai_key,
+    validate_openai_model_pair,
+)
 
 
 async def get_ai_settings(db: AsyncSession, current_user: User):
@@ -55,18 +36,23 @@ async def update_ai_settings(db: AsyncSession, current_user: User, data: AISetti
 
     update_data = data.model_dump(exclude_unset=True)
     provider = (update_data.get("ai_provider") or current_user.ai_provider or "ollama").strip().lower()
-    api_key = _normalize_text(update_data.get("openai_api_key", current_user.openai_api_key))
-    embedding_model = _normalize_text(update_data.get("openai_embedding_model", current_user.openai_embedding_model))
-    llm_model = _normalize_text(update_data.get("openai_llm_model", current_user.openai_llm_model))
+    api_key = normalize_openai_key(update_data.get("openai_api_key", current_user.openai_api_key))
+    embedding_model = normalize_model_name(update_data.get("openai_embedding_model", current_user.openai_embedding_model))
+    llm_model = normalize_model_name(update_data.get("openai_llm_model", current_user.openai_llm_model))
 
     if update_data.get("clear_openai_api_key"):
         api_key = None
 
-    _validate_ai_settings(
+    validate_openai_model_pair(
         ai_provider=provider,
         openai_api_key=api_key,
         openai_embedding_model=embedding_model,
         openai_llm_model=llm_model,
+    )
+    await ensure_unique_openai_api_key(
+        db,
+        openai_api_key=api_key,
+        exclude_user_id=current_user.id,
     )
 
     current_user.ai_provider = provider

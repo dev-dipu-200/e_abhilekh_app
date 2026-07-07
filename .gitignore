@@ -27,6 +27,7 @@ docker-compose.override.yml
 
 # Media
 files/
+ui_sample_frontend/
 
 # Static
 staticfiles/

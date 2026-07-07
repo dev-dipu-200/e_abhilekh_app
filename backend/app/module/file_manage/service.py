@@ -8,6 +8,7 @@ from app.database.file_model import Document, Folder, Department, DocumentType, 
 from app.database.user_model import Organization, User
 from app.module.file_manage.schema import DocumentCreate, DocumentUpdate, FolderCreate, SearchResultItem
 from app.utils.ai_runtime import resolve_ai_config, resolve_org_ai_config
+from app.utils.file_number import generate_file_number
 from app.utils.pagination import paginate_select, paginate_sequence
 from app.utils.qdrant_store import search as qdrant_search, delete_document_chunks
 
@@ -58,8 +59,10 @@ async def log_document_activity(
 
 
 async def create_document(db: AsyncSession, data: DocumentCreate, uploader_id: str, file_path: str):
+    if not data.file_number:
+        data.file_number = await generate_file_number(db, data.organization_id)
     if not data.folder_id:
-        folder_name = f"File_NO-{uuid.uuid4().hex[:6]}"
+        folder_name = data.file_number
         folder = Folder(
             name=folder_name,
             organization_id=data.organization_id,

@@ -7,6 +7,13 @@ import { useAuth } from '@/context/AuthContext'
 import { api } from '@/lib/api'
 import type { AISettings } from '@/lib/types'
 
+type FormErrors = {
+  openai_api_key?: string
+  openai_embedding_model?: string
+  openai_llm_model?: string
+  general?: string
+}
+
 const initialState: AISettings = {
   ai_provider: 'ollama',
   openai_embedding_model: 'text-embedding-3-large',
@@ -23,7 +30,7 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<AISettings>(initialState)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [errors, setErrors] = useState<FormErrors>({})
   const [openaiApiKey, setOpenaiApiKey] = useState('')
   const [clearOpenAiKey, setClearOpenAiKey] = useState(false)
 
@@ -39,25 +46,45 @@ export default function SettingsPage() {
       .finally(() => setLoading(false))
   }, [canManage])
 
+  const mapError = (message: string): FormErrors => {
+    const normalized = message.toLowerCase()
+    if (normalized.includes('api key')) {
+      return { openai_api_key: message }
+    }
+    if (normalized.includes('embedding model and llm model must be different')) {
+      return {
+        openai_embedding_model: message,
+        openai_llm_model: message,
+      }
+    }
+    if (normalized.includes('embedding model')) {
+      return { openai_embedding_model: message }
+    }
+    if (normalized.includes('llm model')) {
+      return { openai_llm_model: message }
+    }
+    return { general: message }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (settings.ai_provider === 'openai') {
       const usingExistingKey = settings.has_openai_api_key && !clearOpenAiKey && !openaiApiKey.trim()
       if (!usingExistingKey && !openaiApiKey.trim()) {
-        setError('OpenAI API key is required for OpenAI provider')
+        setErrors({ openai_api_key: 'OpenAI API key is required for OpenAI provider' })
         return
       }
       if (!settings.openai_embedding_model?.trim()) {
-        setError('OpenAI embedding model is required')
+        setErrors({ openai_embedding_model: 'OpenAI embedding model is required' })
         return
       }
       if (!settings.openai_llm_model?.trim()) {
-        setError('OpenAI LLM model is required')
+        setErrors({ openai_llm_model: 'OpenAI LLM model is required' })
         return
       }
     }
 
-    setError('')
+    setErrors({})
     setSaving(true)
     try {
       const updated = await api.settings.updateAI({
@@ -70,6 +97,9 @@ export default function SettingsPage() {
       setSettings(updated)
       setOpenaiApiKey('')
       setClearOpenAiKey(false)
+      setErrors({})
+    } catch (err) {
+      setErrors(mapError(err instanceof Error ? err.message : 'Unable to save settings'))
     } finally {
       setSaving(false)
     }
@@ -120,6 +150,7 @@ export default function SettingsPage() {
                       value={openaiApiKey}
                       onChange={(e) => setOpenaiApiKey(e.target.value)}
                       placeholder="sk-..."
+                      error={errors.openai_api_key}
                     />
                     {settings.has_openai_api_key && (
                       <label className="flex items-center gap-2">
@@ -138,6 +169,7 @@ export default function SettingsPage() {
                       value={settings.openai_embedding_model || ''}
                       onChange={(e) => setSettings((prev) => ({ ...prev, openai_embedding_model: e.target.value }))}
                       placeholder="text-embedding-3-large"
+                      error={errors.openai_embedding_model}
                     />
                     <Input
                       id="openai_llm_model"
@@ -145,11 +177,12 @@ export default function SettingsPage() {
                       value={settings.openai_llm_model || ''}
                       onChange={(e) => setSettings((prev) => ({ ...prev, openai_llm_model: e.target.value }))}
                       placeholder="gpt-4o-mini"
+                      error={errors.openai_llm_model}
                     />
                   </>
                 )}
 
-                {error && <p className="text-sm text-red-600">{error}</p>}
+                {errors.general && <p className="text-sm text-red-600">{errors.general}</p>}
 
                 <div className="flex justify-end">
                   <Button type="submit" loading={saving}>Save Settings</Button>
