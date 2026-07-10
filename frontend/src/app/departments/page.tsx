@@ -11,9 +11,11 @@ import { useAppDispatch, useAppSelector } from '@/lib/store/hooks'
 import { store } from '@/lib/store'
 import type { Department } from '@/lib/types'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { useLanguage } from '@/context/LanguageContext'
 
 export default function DepartmentsPage() {
   const { user } = useAuth()
+  const { t } = useLanguage()
   const dispatch = useAppDispatch()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Department | null>(null)
@@ -42,7 +44,7 @@ export default function DepartmentsPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure?')) return
+    if (!confirm(t('common.areYouSure'))) return
     await api.departments.delete(id)
     await load(true)
   }
@@ -51,19 +53,19 @@ export default function DepartmentsPage() {
     <AppLayout>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="page-title mb-0">Departments</h2>
-          <p className="text-sm text-gray-500">Manage departments within organizations</p>
+          <h2 className="page-title mb-0">{t('depts.title')}</h2>
+          <p className="text-sm text-gray-500">{t('depts.subtitle')}</p>
         </div>
         <Button onClick={() => { setEditing(null); setModalOpen(true) }}>
-          <Plus className="h-4 w-4" /> Add Department
+          <Plus className="h-4 w-4" /> {t('depts.add')}
         </Button>
       </div>
 
       <Table
         columns={[
-          { key: 'name', header: 'Name' },
+          { key: 'name', header: t('common.name') },
           {
-            key: 'created_at', header: 'Created',
+            key: 'created_at', header: t('common.created'),
             render: (item) => new Date(item.created_at).toLocaleDateString(),
           },
           {
@@ -80,7 +82,7 @@ export default function DepartmentsPage() {
         loading={loading}
       />
 
-      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null) }} title={editing ? 'Edit Department' : 'Add Department'}>
+      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null) }} title={editing ? t('depts.edit') : t('depts.add')}>
         <DepartmentForm initial={editing || undefined} onSubmit={handleSubmit} onCancel={() => { setModalOpen(false); setEditing(null) }} loading={saving} />
       </Modal>
     </AppLayout>

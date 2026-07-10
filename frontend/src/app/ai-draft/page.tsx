@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { AppLayout } from '@/components/Layout/AppLayout'
 import { Button, Card, Spinner } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
+import { useLanguage } from '@/context/LanguageContext'
 import { api, redirectIfUnauthorized } from '@/lib/api'
 import { useAppDispatch, useAppSelector } from '@/lib/store/hooks'
 import { patchAiDraft, resetAiDraft } from '@/lib/store/slices/formsSlice'
@@ -12,12 +13,6 @@ import { toast } from '@/lib/toast'
 import type { DraftTemplate, Document } from '@/lib/types'
 import { FileText, Send, Save, Download, Copy, Check, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, List, ListOrdered, ArrowRight, BookOpen, Languages, Eye, Edit3 } from 'lucide-react'
 import { fetchSuggestions, transliterateWord } from '@/lib/transliterate'
-
-const TONE_OPTIONS = [
-  { value: 'formal', label: 'Formal' },
-  { value: 'semi-formal', label: 'Semi-Formal' },
-  { value: 'neutral', label: 'Neutral' },
-]
 
 const TEMPLATE_ICONS: Record<string, string> = {
   letter: '📄',
@@ -219,7 +214,14 @@ function DraftPreview({ text }: { text: string }) {
 
 function AIDraftContent() {
   const { user } = useAuth()
+  const { t } = useLanguage()
   const dispatch = useAppDispatch()
+
+  const TONE_OPTIONS = [
+    { value: 'formal', label: t('aiDraft.toneFormal') },
+    { value: 'semi-formal', label: t('aiDraft.toneSemiFormal') },
+    { value: 'neutral', label: t('aiDraft.toneNeutral') },
+  ]
   const orgId = user?.organization_id ?? ''
   const searchParams = useSearchParams()
 
@@ -623,10 +625,10 @@ function AIDraftContent() {
       <div className="space-y-6">
         <div className="flex items-start justify-between gap-3">
           <div>
-          <h2 className="page-title">AI Draft Generator</h2>
-          <p className="text-gray-500 -mt-4 mb-6">Generate government-style documents using AI</p>
+          <h2 className="page-title">{t('aiDraft.title')}</h2>
+          <p className="text-gray-500 -mt-4 mb-6">{t('aiDraft.subtitle')}</p>
           </div>
-          <Button type="button" variant="secondary" size="sm" onClick={handleResetForm}>Reset</Button>
+          <Button type="button" variant="secondary" size="sm" onClick={handleResetForm}>{t('aiDraft.reset')}</Button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -634,7 +636,7 @@ function AIDraftContent() {
           <div className="lg:col-span-2 space-y-4">
             {/* Template Selection */}
             <Card>
-              <h3 className="text-sm font-semibold text-gray-800 mb-3">Document Type</h3>
+              <h3 className="text-sm font-semibold text-gray-800 mb-3">{t('aiDraft.documentType')}</h3>
               <div className="grid grid-cols-2 gap-2">
                 {TEMPLATE_ORDER.map(id => {
                   const tmpl = templates.find(t => t.id === id)
@@ -654,13 +656,13 @@ function AIDraftContent() {
 
             {/* Draft Parameters */}
             <Card>
-              <h3 className="text-sm font-semibold text-gray-800 mb-3">Draft Parameters</h3>
+              <h3 className="text-sm font-semibold text-gray-800 mb-3">{t('aiDraft.draftParameters')}</h3>
               <div className="space-y-3">
                 <div>
-                  <label className="form-label">Reference File</label>
+                  <label className="form-label">{t('aiDraft.referenceFile')}</label>
                   <select value={selectedDoc} onChange={(e) => setSelectedDoc(e.target.value)}
                     className="form-input">
-                    <option value="">Select a document...</option>
+                    <option value="">{t('aiDraft.selectDocument')}</option>
                     {documents.map(d => (
                       <option key={d.id} value={d.id}>
                         {d.file?.split('/').pop() || d.id} {d.subject ? `- ${d.subject.slice(0, 40)}` : ''}
@@ -677,14 +679,14 @@ function AIDraftContent() {
 
                 <div>
                   <label className="form-label">
-                    {isInstructionsHindi ? 'मुख्य बिंदु / निर्देश' : 'Key Points / Instructions'}
+                    {isInstructionsHindi ? 'मुख्य बिंदु / निर्देश' : t('aiDraft.keyPoints')}
                     {selectedTemplate === 'information' && <span className="text-red-500 ml-1">*</span>}
                   </label>
                   <div className="flex gap-2 mb-2">
                     <button onClick={() => setIsInstructionsHindi(false)}
-                      className={`text-xs px-2 py-1 rounded ${!isInstructionsHindi ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-500'}`}>English</button>
+                      className={`text-xs px-2 py-1 rounded ${!isInstructionsHindi ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-500'}`}>{t('aiSearch.english')}</button>
                     <button onClick={() => setIsInstructionsHindi(true)}
-                      className={`text-xs px-2 py-1 rounded ${isInstructionsHindi ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-500'}`}>हिन्दी</button>
+                      className={`text-xs px-2 py-1 rounded ${isInstructionsHindi ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-500'}`}>{t('aiSearch.hindi')}</button>
                   </div>
                   <div className="relative">
                     <textarea ref={instructRef} value={instructions}
@@ -722,13 +724,13 @@ function AIDraftContent() {
                           </button>
                         ))}
                         <p className="px-4 py-1.5 text-xs text-gray-400 border-t border-gray-100 bg-gray-50/50">
-                          ↑↓ Navigate · Enter/Tab select · Esc close
+                          {t('aiDraft.suggestionHint')}
                         </p>
                       </div>
                     )}
                     {isInstructionsHindi && (
                       <p className="text-xs text-gray-400 flex items-center gap-1 mt-1">
-                        <Languages className="h-3 w-3" /> हिंदी · type & press Space to transliterate
+                        <Languages className="h-3 w-3" /> {t('aiDraft.translitHint')}
                       </p>
                     )}
                   </div>
@@ -736,15 +738,15 @@ function AIDraftContent() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="form-label">Language</label>
+                    <label className="form-label">{t('aiDraft.language')}</label>
                     <select value={language} onChange={(e) => setLanguage(e.target.value as 'en' | 'hi')}
                       className="form-input">
-                      <option value="en">English</option>
-                      <option value="hi">हिन्दी</option>
+                      <option value="en">{t('aiSearch.english')}</option>
+                      <option value="hi">{t('aiSearch.hindi')}</option>
                     </select>
                   </div>
                   <div>
-                    <label className="form-label">Tone</label>
+                    <label className="form-label">{t('aiDraft.tone')}</label>
                     <select value={tone} onChange={(e) => setTone(e.target.value)}
                       className="form-input">
                       {TONE_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -754,7 +756,7 @@ function AIDraftContent() {
 
                 <Button onClick={handleGenerate} disabled={generating || !selectedTemplate || !selectedDoc} className="w-full">
                   {generating ? <Spinner /> : <Send className="h-4 w-4" />}
-                  {generating ? 'Generating...' : 'Generate AI Draft'}
+                  {generating ? t('aiDraft.generating') : t('aiDraft.generate')}
                 </Button>
               </div>
             </Card>
@@ -766,18 +768,18 @@ function AIDraftContent() {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
                   <FileText className="h-4 w-4 text-primary-600" />
-                  Generated Draft
+                  {t('aiDraft.generatedDraft')}
                   {selectedTemplate && <span className="text-xs font-normal text-gray-400">/ {templates.find(t => t.id === selectedTemplate)?.name || selectedTemplate}</span>}
                 </h3>
                 {showEditor && (
                   <div className="flex items-center gap-1">
-                    <button onClick={handleCopy} className="p-1.5 rounded hover:bg-gray-100 text-gray-500" title="Copy">
+                    <button onClick={handleCopy} className="p-1.5 rounded hover:bg-gray-100 text-gray-500" title={t('aiDraft.copy')}>
                       {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                     </button>
-                    <button onClick={handleSave} className="p-1.5 rounded hover:bg-gray-100 text-gray-500" title="Save">
+                    <button onClick={handleSave} className="p-1.5 rounded hover:bg-gray-100 text-gray-500" title={t('aiDraft.save')}>
                       <Save className="h-4 w-4" />
                     </button>
-                    <button onClick={() => handleExport('docx')} className="p-1.5 rounded hover:bg-gray-100 text-gray-500" title="Export DOCX">
+                    <button onClick={() => handleExport('docx')} className="p-1.5 rounded hover:bg-gray-100 text-gray-500" title={t('aiDraft.exportDocx')}>
                       <Download className="h-4 w-4" />
                     </button>
                   </div>
@@ -788,7 +790,7 @@ function AIDraftContent() {
               {generating && (
                 <div className="flex items-center gap-2 text-sm text-primary-600 mb-3 pb-3 border-b border-gray-100">
                   <Spinner />
-                  <span>Synthesizing document from reference and context...</span>
+                  <span>{t('aiDraft.synthesizing')}</span>
                 </div>
               )}
 
@@ -797,8 +799,8 @@ function AIDraftContent() {
                 {!draftText && !generating && (
                   <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                     <BookOpen className="h-12 w-12 mb-3 text-gray-300" />
-                    <p className="font-medium text-gray-500">No draft generated yet</p>
-                    <p className="text-sm mt-1">Select a template and reference file, then generate</p>
+                    <p className="font-medium text-gray-500">{t('aiDraft.noDraftYet')}</p>
+                    <p className="text-sm mt-1">{t('aiDraft.selectAndGenerate')}</p>
                   </div>
                 )}
                 {draftText && (
@@ -807,11 +809,11 @@ function AIDraftContent() {
                       <div className="flex items-center gap-1">
                         <button onClick={switchToPreview}
                           className={`p-1.5 rounded text-xs px-3 flex items-center gap-1 ${previewMode ? 'bg-primary-100 text-primary-700' : 'hover:bg-gray-100 text-gray-500'}`}>
-                          <Eye className="h-3.5 w-3.5" /> Preview
+                          <Eye className="h-3.5 w-3.5" /> {t('aiDraft.preview')}
                         </button>
                         <button onClick={() => setPreviewMode(false)}
                           className={`p-1.5 rounded text-xs px-3 flex items-center gap-1 ${!previewMode ? 'bg-primary-100 text-primary-700' : 'hover:bg-gray-100 text-gray-500'}`}>
-                          <Edit3 className="h-3.5 w-3.5" /> Edit
+                          <Edit3 className="h-3.5 w-3.5" /> {t('aiDraft.edit')}
                         </button>
                       </div>
                       {!previewMode && (
@@ -829,7 +831,7 @@ function AIDraftContent() {
                           <span className="w-px h-4 bg-gray-200 mx-1" />
                           <button onClick={() => setIsTranslitMode(!isTranslitMode)}
                             className={`p-1.5 rounded text-xs px-2 ${isTranslitMode ? 'bg-primary-100 text-primary-700' : 'hover:bg-gray-100 text-gray-500'}`}>
-                            {isTranslitMode ? 'देवनागरी' : 'EN'}
+                            {isTranslitMode ? t('aiDraft.devanagari') : t('aiDraft.en')}
                           </button>
                         </div>
                       )}
@@ -890,14 +892,14 @@ function AIDraftContent() {
               {showEditor && (
                 <div className="flex items-center justify-between pt-3 mt-3 border-t border-gray-100">
                   <div className="flex items-center gap-2">
-                    {savedId && <span className="text-xs text-green-600 flex items-center gap-1"><Check className="h-3 w-3" /> Saved</span>}
+                    {savedId && <span className="text-xs text-green-600 flex items-center gap-1"><Check className="h-3 w-3" /> {t('aiDraft.saved')}</span>}
                   </div>
                   <div className="flex items-center gap-2">
                     <Button variant="secondary" size="sm" onClick={() => handleExport('docx')}>
                       <Download className="h-3.5 w-3.5" /> DOCX
                     </Button>
                     <Button size="sm" onClick={handleSave}>
-                      <Save className="h-3.5 w-3.5" /> Save Draft
+                      <Save className="h-3.5 w-3.5" /> {t('aiDraft.save')}
                     </Button>
                   </div>
                 </div>

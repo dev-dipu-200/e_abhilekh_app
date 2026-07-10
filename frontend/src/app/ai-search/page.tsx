@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { AppLayout } from '@/components/Layout/AppLayout'
 import { Button, Card, Spinner, Badge } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
+import { useLanguage } from '@/context/LanguageContext'
 import { api } from '@/lib/api'
 import { ensureDepartments, ensureDocumentTypes, getScopeKey } from '@/lib/store/catalog'
 import { store } from '@/lib/store'
@@ -16,6 +17,7 @@ import { fetchSuggestions } from '@/lib/transliterate'
 
 export default function AISearchPage() {
   const { user } = useAuth()
+  const { t } = useLanguage()
   const dispatch = useAppDispatch()
   const router = useRouter()
   const orgId = user?.organization_id ?? ''
@@ -169,8 +171,8 @@ export default function AISearchPage() {
     <AppLayout>
       <div className="space-y-6">
         <div>
-          <h2 className="page-title">AI Search</h2>
-          <p className="text-gray-500 -mt-4 mb-6">Semantic document search with filters</p>
+          <h2 className="page-title">{t('aiSearch.title')}</h2>
+          <p className="text-gray-500 -mt-4 mb-6">{t('aiSearch.subtitle')}</p>
         </div>
 
         {/* Search Hero */}
@@ -178,21 +180,21 @@ export default function AISearchPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-gray-700">Language:</span>
+                <span className="text-sm font-medium text-gray-700">{t('aiSearch.language')}</span>
                 <button onClick={() => dispatch(patchAiSearch({ language: 'en' }))}
                   className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${language === 'en' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                  <Languages className="inline h-4 w-4 mr-1" />English
+                  <Languages className="inline h-4 w-4 mr-1" />{t('aiSearch.english')}
                 </button>
                 <button onClick={() => dispatch(patchAiSearch({ language: 'hi' }))}
                   className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${language === 'hi' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                  <Languages className="inline h-4 w-4 mr-1" />हिन्दी
+                  <Languages className="inline h-4 w-4 mr-1" />{t('aiSearch.hindi')}
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                <Button type="button" variant="secondary" size="sm" onClick={handleReset}>Reset</Button>
+                <Button type="button" variant="secondary" size="sm" onClick={handleReset}>{t('aiSearch.reset')}</Button>
                 <button onClick={() => dispatch(patchAiSearch({ showFilters: !showFilters }))}
                 className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg transition-colors ${showFilters ? 'bg-primary-50 text-primary-700' : 'text-gray-500 hover:text-gray-700'}`}>
-                <Filter className="h-4 w-4" /> Filters {hasFilters && <Badge variant="blue">!</Badge>}
+                <Filter className="h-4 w-4" /> {t('aiSearch.filters')} {hasFilters && <Badge variant="blue">!</Badge>}
               </button>
               </div>
             </div>
@@ -216,18 +218,18 @@ export default function AISearchPage() {
                       </button>
                     ))}
                     <p className="px-4 py-1.5 text-xs text-gray-400 border-t border-gray-100 bg-gray-50/50">
-                      ↑↓ Navigate · Enter/Tab select · Esc close
+                      ↑↓ {t('aiSearch.suggestionHint')}
                     </p>
                   </div>
                 )}
               </div>
               <Button onClick={handleSearch} disabled={loading || !query.trim()}>
-                {loading ? <Spinner /> : <><Search className="h-4 w-4" /> Run Smart Search</>}
+                {loading ? <Spinner /> : <><Search className="h-4 w-4" /> {t('aiSearch.searchButton')}</>}
               </Button>
             </div>
             {language === 'hi' && (
               <p className="text-xs text-gray-400 flex items-center gap-1">
-                <Languages className="h-3 w-3" /> हिंदी · type & press Space to transliterate
+                <Languages className="h-3 w-3" /> {t('aiSearch.translitHint')}
               </p>
             )}
 
@@ -235,29 +237,29 @@ export default function AISearchPage() {
             {showFilters && (
               <div className="flex flex-wrap items-end gap-3 pt-2 border-t border-gray-100">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Department</label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">{t('aiSearch.department')}</label>
                   <select value={filterDept} onChange={(e) => dispatch(patchAiSearch({ filterDept: e.target.value }))}
                     className="form-input text-sm py-1.5 pr-8">
-                    <option value="">All Departments</option>
+                    <option value="">{t('aiSearch.allDepartments')}</option>
                     {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Document Type</label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">{t('aiSearch.documentType')}</label>
                   <select value={filterDocType} onChange={(e) => dispatch(patchAiSearch({ filterDocType: e.target.value }))}
                     className="form-input text-sm py-1.5 pr-8">
-                    <option value="">All Types</option>
+                    <option value="">{t('aiSearch.allTypes')}</option>
                     {docTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Year</label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">{t('aiSearch.year')}</label>
                   <input type="number" value={filterYear} onChange={(e) => dispatch(patchAiSearch({ filterYear: e.target.value }))}
-                    placeholder="e.g. 2026" className="form-input text-sm py-1.5 w-24" />
+                    placeholder={t('aiSearch.yearPlaceholder')} className="form-input text-sm py-1.5 w-24" />
                 </div>
                 {hasFilters && (
                   <button onClick={clearFilters} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 pb-1">
-                    <X className="h-3 w-3" /> Clear Filters
+                    <X className="h-3 w-3" /> {t('aiSearch.clearFilters')}
                   </button>
                 )}
               </div>
@@ -270,7 +272,7 @@ export default function AISearchPage() {
           {loading && results.length === 0 && (
             <div className="text-center py-16">
               <Spinner />
-              <p className="text-gray-500 mt-2 text-sm">Searching documents...</p>
+              <p className="text-gray-500 mt-2 text-sm">{t('aiSearch.searching')}</p>
             </div>
           )}
 
@@ -278,8 +280,8 @@ export default function AISearchPage() {
             <Card>
               <div className="text-center py-10 text-gray-500">
                 <Search className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                <p className="font-medium">No results found for &ldquo;{query}&rdquo;</p>
-                <p className="text-sm mt-1">Try different search terms or adjust filters</p>
+                <p className="font-medium">{t('aiSearch.noResults')} &ldquo;{query}&rdquo;</p>
+                <p className="text-sm mt-1">{t('aiSearch.tryDifferent')}</p>
               </div>
             </Card>
           )}
@@ -288,7 +290,7 @@ export default function AISearchPage() {
             <>
               <div className="flex items-center justify-between">
                 <p className="text-sm text-gray-500">
-                  Found {results.length} results {elapsed > 0 && <span className="ml-2">(<Clock className="inline h-3 w-3" /> {elapsed}ms)</span>}
+                  {t('aiSearch.found')} {results.length} {t('aiSearch.results')} {elapsed > 0 && <span className="ml-2">(<Clock className="inline h-3 w-3" /> {elapsed}ms)</span>}
                 </p>
               </div>
 
@@ -300,12 +302,12 @@ export default function AISearchPage() {
                       <div className="flex items-center gap-2 min-w-0">
                         <FileText className="h-4 w-4 text-primary-600 shrink-0 mt-0.5" />
                         <span className="font-medium text-sm text-gray-900 hover:text-primary-600 truncate">
-                          {item.document_subject || `Document ${item.document_id.slice(0, 12)}...`}
+                          {item.document_subject || `${t('aiSearch.document')} ${item.document_id.slice(0, 12)}...`}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <Badge variant={item.match_type === 'exact' ? 'green' : 'blue'}>
-                          {item.match_type === 'exact' ? 'Exact Match' : 'Semantic Match'}
+                          {item.match_type === 'exact' ? t('aiSearch.exactMatch') : t('aiSearch.semanticMatch')}
                         </Badge>
                         <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700">
                           {(item.score * 100).toFixed(1)}%
@@ -314,15 +316,15 @@ export default function AISearchPage() {
                     </div>
                     <p className="text-sm text-gray-600 line-clamp-3 leading-relaxed">{highlightMatches(item.content)}</p>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400">
-                        {item.file_number && <span>File No: {item.file_number}</span>}
-                        {item.department && <span>Dept: {item.department}</span>}
-                        {item.document_type && <span>Type: {item.document_type}</span>}
-                        {item.page_number != null && <span>Page: {item.page_number}</span>}
-                        {item.file_date && <span>Date: {item.file_date}</span>}
+                        {item.file_number && <span>{t('aiSearch.fileNo')} {item.file_number}</span>}
+                        {item.department && <span>{t('aiSearch.dept')} {item.department}</span>}
+                        {item.document_type && <span>{t('aiSearch.type')} {item.document_type}</span>}
+                        {item.page_number != null && <span>{t('aiSearch.page')} {item.page_number}</span>}
+                        {item.file_date && <span>{t('aiSearch.date')} {item.file_date}</span>}
                       </div>
                       <div className="pt-2">
                         <Button variant="primary" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/ai-draft?document_id=${item.document_id}`) }}>
-                          <Sparkles className="h-3.5 w-3.5" /> Generate Draft
+                          <Sparkles className="h-3.5 w-3.5" /> {t('aiSearch.generateDraft')}
                         </Button>
                       </div>
                     </button>
@@ -332,7 +334,7 @@ export default function AISearchPage() {
               {hasMore && (
                 <div className="text-center pt-2">
                   <Button variant="secondary" onClick={loadMore} loading={loading}>
-                    <ChevronDown className="h-4 w-4" /> Load More Results
+                    <ChevronDown className="h-4 w-4" /> {t('aiSearch.loadMore')}
                   </Button>
                 </div>
               )}

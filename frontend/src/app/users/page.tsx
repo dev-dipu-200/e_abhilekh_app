@@ -7,8 +7,10 @@ import { UserForm } from '@/components/users/UserForm'
 import { api } from '@/lib/api'
 import type { User } from '@/lib/types'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { useLanguage } from '@/context/LanguageContext'
 
 export default function UsersPage() {
+  const { t } = useLanguage()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
@@ -35,7 +37,7 @@ export default function UsersPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure?')) return
+    if (!confirm(t('common.areYouSure'))) return
     await api.users.delete(id)
     await load()
   }
@@ -44,22 +46,22 @@ export default function UsersPage() {
     <AppLayout>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="page-title mb-0">Users</h2>
-          <p className="text-sm text-gray-500">Manage system users</p>
+          <h2 className="page-title mb-0">{t('users.title')}</h2>
+          <p className="text-sm text-gray-500">{t('users.subtitle')}</p>
         </div>
         <Button onClick={() => { setEditing(null); setModalOpen(true) }}>
-          <Plus className="h-4 w-4" /> Add User
+          <Plus className="h-4 w-4" /> {t('users.add')}
         </Button>
       </div>
 
       <Table
         columns={[
-          { key: 'email', header: 'Email' },
-          { key: 'username', header: 'Username' },
-          { key: 'full_name', header: 'Full Name' },
+          { key: 'email', header: t('users.email') },
+          { key: 'username', header: t('users.username') },
+          { key: 'full_name', header: t('users.fullName') },
           {
-            key: 'is_active', header: 'Status',
-            render: (item) => <Badge variant={item.is_active ? 'green' : 'red'}>{item.is_active ? 'Active' : 'Inactive'}</Badge>,
+            key: 'is_active', header: t('users.status'),
+            render: (item) => <Badge variant={item.is_active ? 'green' : 'red'}>{item.is_active ? t('common.active') : t('common.inactive')}</Badge>,
           },
           {
             key: 'actions', header: '', className: 'table-cell text-right',
@@ -75,7 +77,7 @@ export default function UsersPage() {
         loading={loading}
       />
 
-      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null) }} title={editing ? 'Edit User' : 'Add User'} size="lg">
+      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null) }} title={editing ? t('users.edit') : t('users.add')} size="lg">
         <UserForm initial={editing || undefined} onSubmit={handleSubmit} onCancel={() => { setModalOpen(false); setEditing(null) }} loading={saving} />
       </Modal>
     </AppLayout>

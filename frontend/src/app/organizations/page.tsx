@@ -8,9 +8,11 @@ import { api } from '@/lib/api'
 import type { Organization } from '@/lib/types'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import { useLanguage } from '@/context/LanguageContext'
 
 export default function OrganizationsPage() {
   const { user } = useAuth()
+  const { t } = useLanguage()
   const canCreateOrDelete = !!user?.is_superuser
   const canEdit = !!user?.is_superuser || !!user?.is_admin
   const [orgs, setOrgs] = useState<Organization[]>([])
@@ -39,7 +41,7 @@ export default function OrganizationsPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure?')) return
+    if (!confirm(t('common.areYouSure'))) return
     await api.organizations.delete(id)
     await load()
   }
@@ -48,26 +50,26 @@ export default function OrganizationsPage() {
     <AppLayout>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="page-title mb-0">Organizations</h2>
-          <p className="text-sm text-gray-500">Manage all organizations in the system</p>
+          <h2 className="page-title mb-0">{t('org.title')}</h2>
+          <p className="text-sm text-gray-500">{t('org.subtitle')}</p>
         </div>
         {canCreateOrDelete && (
           <Button onClick={() => { setEditing(null); setModalOpen(true) }}>
-            <Plus className="h-4 w-4" /> Add Organization
+            <Plus className="h-4 w-4" /> {t('org.add')}
           </Button>
         )}
       </div>
 
       <Table
         columns={[
-          { key: 'name', header: 'Name' },
-          { key: 'address', header: 'Address' },
+          { key: 'name', header: t('org.name') },
+          { key: 'address', header: t('org.address') },
           {
-            key: 'is_active', header: 'Status',
-            render: (item) => <Badge variant={item.is_active ? 'green' : 'red'}>{item.is_active ? 'Active' : 'Inactive'}</Badge>,
+            key: 'is_active', header: t('org.status'),
+            render: (item) => <Badge variant={item.is_active ? 'green' : 'red'}>{item.is_active ? t('common.active') : t('common.inactive')}</Badge>,
           },
           {
-            key: 'created_at', header: 'Created',
+            key: 'created_at', header: t('org.created'),
             render: (item) => new Date(item.created_at).toLocaleDateString(),
           },
           {
@@ -88,7 +90,7 @@ export default function OrganizationsPage() {
         loading={loading}
       />
 
-      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null) }} title={editing ? 'Edit Organization AI Settings' : 'Add Organization'}>
+      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null) }} title={editing ? t('org.edit') : t('org.add')}>
         <OrganizationForm initial={editing || undefined} onSubmit={handleSubmit} onCancel={() => { setModalOpen(false); setEditing(null) }} loading={saving} />
       </Modal>
     </AppLayout>

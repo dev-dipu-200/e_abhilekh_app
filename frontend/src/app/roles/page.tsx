@@ -7,8 +7,10 @@ import { RoleForm } from '@/components/roles/RoleForm'
 import { api } from '@/lib/api'
 import type { Role } from '@/lib/types'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { useLanguage } from '@/context/LanguageContext'
 
 export default function RolesPage() {
+  const { t } = useLanguage()
   const [roles, setRoles] = useState<Role[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
@@ -35,7 +37,7 @@ export default function RolesPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure?')) return
+    if (!confirm(t('common.areYouSure'))) return
     await api.roles.delete(id)
     await load()
   }
@@ -44,26 +46,26 @@ export default function RolesPage() {
     <AppLayout>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="page-title mb-0">Roles</h2>
-          <p className="text-sm text-gray-500">Define roles and permissions</p>
+          <h2 className="page-title mb-0">{t('roles.title')}</h2>
+          <p className="text-sm text-gray-500">{t('roles.subtitle')}</p>
         </div>
         <Button onClick={() => { setEditing(null); setModalOpen(true) }}>
-          <Plus className="h-4 w-4" /> Add Role
+          <Plus className="h-4 w-4" /> {t('roles.add')}
         </Button>
       </div>
 
       <Table
         columns={[
-          { key: 'name', header: 'Name' },
-          { key: 'description', header: 'Description' },
+          { key: 'name', header: t('roles.name') },
+          { key: 'description', header: t('roles.description') },
           {
-            key: 'is_superadmin', header: 'Permissions',
+            key: 'is_superadmin', header: t('roles.permissions'),
             render: (item) => (
               <div className="flex gap-1 flex-wrap">
-                {item.is_superadmin && <Badge variant="red">Superadmin</Badge>}
-                {item.is_admin && <Badge variant="blue">Admin</Badge>}
-                {item.is_read_only && <Badge variant="yellow">Read Only</Badge>}
-                {!item.is_superadmin && !item.is_admin && !item.is_read_only && <Badge variant="gray">Standard</Badge>}
+                {item.is_superadmin && <Badge variant="red">{t('roles.superadmin')}</Badge>}
+                {item.is_admin && <Badge variant="blue">{t('roles.admin')}</Badge>}
+                {item.is_read_only && <Badge variant="yellow">{t('roles.readOnly')}</Badge>}
+                {!item.is_superadmin && !item.is_admin && !item.is_read_only && <Badge variant="gray">{t('roles.standard')}</Badge>}
               </div>
             ),
           },
@@ -81,7 +83,7 @@ export default function RolesPage() {
         loading={loading}
       />
 
-      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null) }} title={editing ? 'Edit Role' : 'Add Role'}>
+      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null) }} title={editing ? t('roles.edit') : t('roles.add')}>
         <RoleForm initial={editing || undefined} onSubmit={handleSubmit} onCancel={() => { setModalOpen(false); setEditing(null) }} loading={saving} />
       </Modal>
     </AppLayout>
