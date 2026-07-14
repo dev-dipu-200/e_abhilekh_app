@@ -11,8 +11,6 @@ def _check_import(module: str, name: str) -> bool:
 def _register_parsers():
     from .pymupdf import PyMuPDFParser
     PARSER_REGISTRY["pymupdf"] = PyMuPDFParser
-    from .tesseract_ocr import TesseractOCRParser
-    PARSER_REGISTRY["tesseract"] = TesseractOCRParser
 
     if _check_import("docling", "DoclingParser"):
         from .docling import DoclingParser

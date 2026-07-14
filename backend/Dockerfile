@@ -7,7 +7,10 @@ RUN pip install --no-cache-dir --user -r requrements.txt
 
 FROM python:3.11-slim
 
-RUN apt-get update -qq && apt-get install -y -qq tesseract-ocr tesseract-ocr-hin && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -qq && apt-get install -y -qq \
+    libgomp1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
